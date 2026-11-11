@@ -1,0 +1,3298 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>창과 대쉬 — 횡스크롤 프로토타입</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #07090f;
+        overflow: hidden;
+        font-family:
+          system-ui,
+          -apple-system,
+          "Apple SD Gothic Neo",
+          "Malgun Gothic",
+          sans-serif;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        cursor: none;
+      }
+      #start {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(5, 7, 12, 0.82);
+        color: #dfe7f2;
+        z-index: 2;
+      }
+      #start .box {
+        max-width: 560px;
+        padding: 28px 32px;
+        border: 1px solid #2a3348;
+        border-radius: 10px;
+        background: #0d1220;
+      }
+      #start h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        letter-spacing: 0.02em;
+      }
+      #start p {
+        margin: 0 0 16px;
+        color: #8d98ad;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      #start table {
+        border-collapse: collapse;
+        font-size: 14px;
+        width: 100%;
+      }
+      #start td {
+        padding: 5px 0;
+        vertical-align: top;
+      }
+      #start td:first-child {
+        color: #7fd7ff;
+        white-space: nowrap;
+        padding-right: 18px;
+        font-weight: 600;
+      }
+      #start button {
+        margin-top: 18px;
+        width: 100%;
+        padding: 11px;
+        border: 0;
+        border-radius: 7px;
+        background: #7fd7ff;
+        color: #07131c;
+        font-weight: 700;
+        font-size: 15px;
+        cursor: pointer;
+      }
+      #start button:hover {
+        background: #a6e4ff;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="start">
+      <div class="box">
+        <h1>창과 대쉬 — 프로토타입</h1>
+        <p>
+          <b>훈련장</b> — 가시·낭떠러지 없음, 허수아비는 계속 다시 나온다. 땅에
+          닿지 않고
+          <b>팔 발사 → 슬링샷 → 베며 돌진(처형 시 초기화) → 대쉬 점프</b>를
+          이어가는 게 핵심. 적이 많으면 Shift 슬로우로 조준해서 연속으로 베자.
+        </p>
+        <table>
+          <tr>
+            <td>A / D · Space</td>
+            <td>이동 · 점프</td>
+          </tr>
+          <tr>
+            <td>좌클릭</td>
+            <td>
+              <b>베며 지나가는 돌진</b> — 커서 근처 적에게 자동으로 붙어
+              통과하며 벤다
+            </td>
+          </tr>
+          <tr>
+            <td></td>
+            <td>
+              공중에선 1회 (팔이 꽂힐 때마다 회복). 처형하면 즉시 초기화 + 공중
+              횟수·마나 회복 · 못 죽이면 튕겨 나옴 · 대상 없이 쓰면 짧고 쿨
+              0.9초 · 빨간 마름모 = 처형 가능 · <b>처형 직후 0.6초</b>는 처형
+              가능한 적을 13칸까지 잡음 (커서에 붉은 원)
+            </td>
+          </tr>
+          <tr>
+            <td>돌진 중 Space</td>
+            <td><b>대쉬 점프</b></td>
+          </tr>
+          <tr>
+            <td>우클릭</td>
+            <td>
+              <b>팔 발사</b> — 바깥 사거리 원(10칸) 안의 벽/적에 자동으로 꽂고
+              날아감. 분리형에선 <b>데미지 없음</b>: 적은 0.5초 경직 + 표식(다음
+              베기 +1)
+            </td>
+          </tr>
+          <tr>
+            <td>날아가는 중 Space</td>
+            <td>
+              <b>슬링샷</b> — 후반부에 누르면 완벽 슬링샷(더 빠르고 돌진
+              초기화). <b>미리 꾹 누르고 있으면 알아서 완벽 타이밍에</b>, 도착
+              직후 0.15초 안에 눌러도 완벽
+            </td>
+          </tr>
+          <tr>
+            <td>Shift (누르고 있기)</td>
+            <td>
+              <b>슬로우</b> — 마나 소모. 세상은 크게, 나는 조금만 느려짐. 놓으면
+              마나 회복
+            </td>
+          </tr>
+          <tr>
+            <td>노란 고리</td>
+            <td>
+              <b>공중 앵커</b> — 팔 전용 발판. 꽂히면 당겨지고 공중 베기 회복
+              (슬링샷 가능)
+            </td>
+          </tr>
+          <tr>
+            <td>초록 링 코스</td>
+            <td>1번부터 순서대로 통과 · 완주 시간 기록 · R 리셋</td>
+          </tr>
+          <tr>
+            <td>4 또는 Tab</td>
+            <td>
+              <b>조작 전환</b> — 분리형(좌클릭 베기 / 우클릭 팔) ↔ 합체형(우클릭
+              하나: 벽이면 이동, 적이면 관통 베기 · 좌클릭 홀드 = 슬로우)
+            </td>
+          </tr>
+          <tr>
+            <td>벽에서 · 1/2/3</td>
+            <td>
+              Space 떨어지기 · W/S 기어가기 · 튜닝 (벽 튀기 / 팔 도착 시 벽 붙기
+              / 천장 붙기)
+            </td>
+          </tr>
+        </table>
+        <button id="go">시작</button>
+      </div>
+    </div>
+    <script>
+      "use strict";
+      // =====================================================================
+      //  수치 (Unity 스크립트 기본값과 같음)
+      // =====================================================================
+      // 좌클릭 베기·우클릭 팔 공통 사거리 (원으로 항상 표시)
+      const RANGE = 10;
+      const C = {
+        // 전체적으로 빠르게 (이전: 이동 8.5, 점프 14.5, 중력 40, 대쉬 속도 52 / 쿨 0.35)
+        moveSpeed: 11,
+        jumpSpeed: 16.5,
+        gravity: 52,
+        maxFall: 28,
+        groundAccel: 120,
+        airAccel: 60,
+        airOverDecel: 14, // 슬링샷·돌진으로 얻은 초과 속도가 더 빨리 빠짐 (이전 7)
+        coyote: 0.1,
+        jumpBuf: 0.12,
+        clingCeiling: true,
+        crawl: 8,
+        detachAway: 4,
+        detachUp: 0,
+        detachLock: 0.1,
+        dashCd: 0.4,
+        snapAngle: 25,
+        maxAirDashes: 1, // 공중에선 돌진 1회 (처형·착지·벽·완벽 슬링샷으로 회복)
+        spearCling: true, // 팔로 날아가 벽에 도착하면 붙기 (2번 키)
+        travelExit: 12,
+        travelTol: 0.6,
+      };
+      const SPC = {
+        // 창은 이제 무기(그림·돌진 공격)로만 씀
+        len: 1.3,
+        strikeDmg: 3,
+        strikeKb: 9,
+        strikeBounce: 14,
+        strikeArrive: 0.4,
+        hitStop: 0.07,
+        shake: 0.18,
+      };
+      // 우클릭: 팔 발사 — 사거리 안에 벽/적이 있으면 자동으로 꽂고 날아감 (추가 조작 없음)
+      const GR = {
+        range: RANGE,
+        anchorCone: 45, // 앵커: 커서 ±45°
+        enemyCone: 30, // 커서 ±12° 안의 적은 우선으로 잡음
+        assistStep: 4,
+        assistSteps: 6, // 벽: ±24°까지  // 벽은 커서 방향이 빗나가면 ±3°씩 최대 ±12°까지 찾아줌
+        mergedCone: 32,
+        mergedArmSpeed: 420,
+        zipSpeed: 95, // 합체형: 적은 ±32°까지, 팔이 거의 즉시 꽂히고 관통하며 벰
+        armSpeed: 170,
+        retractSpeed: 220,
+        pullSpeed: 85,
+        cd: 0.06,
+        missCd: 0.22,
+        slingSpeed: 21,
+        perfectFrom: 0.55,
+        perfectMul: 1.15, // 이전 32 / 1.3   // 날아간 거리 55% 이후 Space = 완벽 슬링샷
+        autoAt: 0.8, // Space를 일찍 눌러 꾹 누르고 있으면 80% 지점에서 알아서 완벽 슬링샷
+        grace: 0.15, // 벽에 도착한 직후 0.15초 안에 Space를 눌러도 완벽 슬링샷
+      };
+      // Shift: 슬로우 (마나 소모, 놓으면 회복)
+      const SLOW = {
+        max: 100,
+        drain: 40,
+        regen: 30,
+        regenDelay: 0.45,
+        minStart: 15,
+        world: 0.22,
+        player: 0.55,
+        killRefund: 20,
+      };
+      // 좌클릭: 적을 베며 통과하는 돌진 (이렐리아 Q / 야스오 E 느낌)
+      const MD = {
+        dist: 5,
+        speed: 62,
+        freeDist: 2.8,
+        freeCd: 0.9, // 대상 없이 쓰면 짧고 쿨이 긺 → 이동기로 남발 못 함
+        lockRange: 7.2,
+        lockAngle: 75, // 베기는 짧게 (팔은 RANGE 10칸) // 강한 보정: 커서 쪽 ±75°, 돌진이 닿는 거리 안의 적에게 알아서 감
+        pass: 1.8,
+        maxDist: 9, // 대상을 지나 이만큼 더 나감
+        dmg: 2,
+        kb: 9,
+        hitR: 0.7,
+        exitSpeed: 10,
+        airPop: 8,
+        hitStop: 0.075,
+        execWindow: 0.6,
+        execRange: 13,
+        execMaxDist: 15, // 처형 직후 0.6초 동안 처형 가능한 적은 13칸까지
+        recoil: 6, // 못 죽이면 튕겨 나옴 (뜨지 않음) / 처형하면 즉시 초기화 + 공중 횟수 회복 + 마나
+      };
+      // 핵심 기동 루프 (항상 켜짐)
+      //  좌클릭 돌진 → Space 대쉬 점프 / 우클릭 창 → 우클릭 → Space 슬링샷(창 회수) / 베면 돌진 즉시 회복
+      const M = {
+        dashJump: true,
+        dashJumpSpeed: 22,
+        dashJumpWindow: 0.14,
+        slingshot: true,
+        slingSpeed: 34,
+        hitRefresh: true,
+      };
+
+      // =====================================================================
+      //  캔버스 / 입력
+      // =====================================================================
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const cv = document.getElementById("c"),
+        ctx = cv.getContext("2d");
+      let VW = 0,
+        VH = 0,
+        SC = 40;
+      function resize() {
+        VW = cv.width = Math.floor(innerWidth * dpr);
+        VH = cv.height = Math.floor(innerHeight * dpr);
+        SC = VH / 24;
+      }
+      addEventListener("resize", resize);
+      resize();
+
+      const keys = {},
+        pressed = {};
+      addEventListener("keydown", (e) => {
+        if (!keys[e.code]) pressed[e.code] = true;
+        keys[e.code] = true;
+        if (["Space", "ArrowUp", "ArrowDown", "Tab"].includes(e.code))
+          e.preventDefault();
+      });
+      addEventListener("keyup", (e) => {
+        keys[e.code] = false;
+      });
+      const mouse = {
+        sx: 0,
+        sy: 0,
+        x: 0,
+        y: 0,
+        b: [false, false],
+        down: [false, false],
+      };
+      const btn = (b) => (b === 0 ? 0 : b === 2 ? 1 : -1);
+      cv.addEventListener("mousemove", (e) => {
+        mouse.sx = e.clientX * dpr;
+        mouse.sy = e.clientY * dpr;
+      });
+      cv.addEventListener("mousedown", (e) => {
+        const i = btn(e.button);
+        if (i < 0) return;
+        mouse.b[i] = true;
+        mouse.down[i] = true;
+        e.preventDefault();
+      });
+      addEventListener("mouseup", (e) => {
+        const i = btn(e.button);
+        if (i >= 0) mouse.b[i] = false;
+      });
+      cv.addEventListener("contextmenu", (e) => e.preventDefault());
+      addEventListener("blur", () => {
+        for (const k in keys) keys[k] = false;
+        mouse.b = [false, false];
+      });
+
+      let started = false;
+      document.getElementById("go").onclick = () => {
+        document.getElementById("start").style.display = "none";
+        started = true;
+        last = performance.now();
+      };
+
+      // =====================================================================
+      //  유틸
+      // =====================================================================
+      const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+      const lerp = (a, b, t) => a + (b - a) * t;
+      const moveTowards = (a, b, d) =>
+        Math.abs(b - a) <= d ? b : a + Math.sign(b - a) * d;
+      const hyp = Math.hypot;
+      function segDist(px, py, ax, ay, bx, by) {
+        const abx = bx - ax,
+          aby = by - ay,
+          l = abx * abx + aby * aby;
+        const t =
+          l < 1e-9 ? 0 : clamp(((px - ax) * abx + (py - ay) * aby) / l, 0, 1);
+        return hyp(px - (ax + abx * t), py - (ay + aby * t));
+      }
+      function rayCircle(ox, oy, dx, dy, len, cx, cy, r) {
+        const mx = ox - cx,
+          my = oy - cy,
+          b = mx * dx + my * dy,
+          c = mx * mx + my * my - r * r;
+        if (c <= 0) return 0;
+        if (b > 0) return -1;
+        const disc = b * b - c;
+        if (disc < 0) return -1;
+        const t = -b - Math.sqrt(disc);
+        return t <= len ? t : -1;
+      }
+      const round4 = (x, y) =>
+        Math.abs(x) >= Math.abs(y)
+          ? { x: Math.sign(x) || 1, y: 0 }
+          : { x: 0, y: Math.sign(y) || 1 };
+
+      // =====================================================================
+      //  맵 (y 위가 +, 1 = 벽, 2 = 가시)
+      // =====================================================================
+      const MW = 100,
+        MH = 46;
+      const DOOR = { x0: 164, x1: 165, y0: 36, y1: 46 };
+      const T = new Uint8Array(MW * MH);
+      const get = (x, y) =>
+        x < 0 || y < 0 || x >= MW || y >= MH ? 1 : T[y * MW + x];
+      function fill(x0, y0, x1, y1, v = 1) {
+        for (let y = y0; y <= y1; y++)
+          for (let x = x0; x <= x1; x++)
+            if (x >= 0 && y >= 0 && x < MW && y < MH) T[y * MW + x] = v;
+      }
+      function buildMap() {
+        // 훈련장: 가시·낭떠러지 없는 넓은 방 하나. 팔을 꽂을 기둥·블록과 허수아비만
+        T.fill(0);
+        fill(0, 0, MW - 1, 2); // 바닥 (위 y=3)
+        fill(0, MH - 3, MW - 1, MH - 1); // 천장 (아래 y=43)
+        fill(0, 0, 1, MH - 1);
+        fill(MW - 2, 0, MW - 1, MH - 1); // 양쪽 벽
+        fill(18, 3, 19, 14);
+        fill(80, 3, 81, 14); // 낮은 기둥
+        fill(28, 12, 32, 13);
+        fill(62, 12, 66, 13); // 낮은 발판
+        fill(45, 18, 54, 19); // 가운데 발판
+        fill(38, 26, 39, 33);
+        fill(60, 26, 61, 33); // 떠 있는 세로 기둥
+        fill(23, 31, 28, 32);
+        fill(71, 31, 76, 32); // 높은 발판
+        fill(48, 35, 51, 42); // 천장에서 내려온 기둥
+      }
+      function solidAt(tx, ty) {
+        return get(tx, ty) === 1;
+      }
+
+      // 상자(중심 x,y, 크기 w,h)가 벽과 겹치는지
+      function overlap(x, y, w, h) {
+        const x0 = Math.floor(x - w / 2 + 1e-6),
+          x1 = Math.floor(x + w / 2 - 1e-6),
+          y0 = Math.floor(y - h / 2 + 1e-6),
+          y1 = Math.floor(y + h / 2 - 1e-6);
+        for (let ty = y0; ty <= y1; ty++)
+          for (let tx = x0; tx <= x1; tx++) if (get(tx, ty) === 1) return true;
+        return false;
+      }
+      const SKIN = 0.002;
+      // 한 축으로 이동. 막히면 벽에 딱 붙이고 막힌 방향(±1) 반환
+      function moveAxis(e, d, ax) {
+        if (d === 0) return 0;
+        const s = Math.sign(d);
+        let rem = Math.abs(d);
+        while (rem > 1e-9) {
+          const st = Math.min(rem, 0.2);
+          rem -= st;
+          if (ax === 0) {
+            e.x += s * st;
+            if (overlap(e.x, e.y, e.w, e.h)) {
+              e.x =
+                s > 0
+                  ? Math.floor(e.x + e.w / 2 - 1e-6) - e.w / 2 - SKIN
+                  : Math.floor(e.x - e.w / 2 + 1e-6) + 1 + e.w / 2 + SKIN;
+              return s;
+            }
+          } else {
+            e.y += s * st;
+            if (overlap(e.x, e.y, e.w, e.h)) {
+              e.y =
+                s > 0
+                  ? Math.floor(e.y + e.h / 2 - 1e-6) - e.h / 2 - SKIN
+                  : Math.floor(e.y - e.h / 2 + 1e-6) + 1 + e.h / 2 + SKIN;
+              return s;
+            }
+          }
+        }
+        return 0;
+      }
+      function move(e, dx, dy) {
+        const hx = moveAxis(e, dx, 0);
+        const hy = moveAxis(e, dy, 1);
+        return { x: hx, y: hy };
+      }
+      function touching(e, w) {
+        return overlap(e.x + w.x * 0.03, e.y + w.y * 0.03, e.w, e.h);
+      }
+      // 방향 그대로 쓸기 (미끄러짐 없음) — 돌진 / 창 이동용
+      function castAlong(x, y, w, h, dx, dy, dist) {
+        if (overlap(x, y, w, h)) return { d: 0, wall: round4(dx, dy) };
+        const step = 0.03;
+        let t = 0,
+          px = x,
+          py = y;
+        while (t < dist) {
+          const nt = Math.min(dist, t + step),
+            qx = x + dx * nt,
+            qy = y + dy * nt;
+          if (overlap(qx, qy, w, h)) {
+            const bx = overlap(qx, py, w, h),
+              by = overlap(px, qy, w, h);
+            let wall;
+            if (bx && !by) wall = { x: Math.sign(dx), y: 0 };
+            else if (by && !bx) wall = { x: 0, y: Math.sign(dy) };
+            else wall = round4(dx, dy);
+            return { d: t, wall };
+          }
+          t = nt;
+          px = qx;
+          py = qy;
+        }
+        return { d: dist, wall: null };
+      }
+      // 점 광선 (창 / 시야). 벽 면에 닿은 거리와 법선
+      function rayTiles(x, y, dx, dy, len) {
+        let ptx = Math.floor(x),
+          pty = Math.floor(y);
+        if (solidAt(ptx, pty)) return { d: 0, nx: -Math.sign(dx), ny: 0 };
+        const step = 0.04;
+        let t = 0;
+        while (t < len) {
+          const nt = Math.min(len, t + step),
+            qx = x + dx * nt,
+            qy = y + dy * nt;
+          const tx = Math.floor(qx),
+            ty = Math.floor(qy);
+          if ((tx !== ptx || ty !== pty) && solidAt(tx, ty)) {
+            let nx = 0,
+              ny = 0;
+            if (tx !== ptx && ty !== pty) {
+              if (solidAt(tx, pty)) nx = -(tx - ptx);
+              else if (solidAt(ptx, ty)) ny = -(ty - pty);
+              else nx = -(tx - ptx);
+            } else if (tx !== ptx) nx = -(tx - ptx);
+            else ny = -(ty - pty);
+            let d = t;
+            if (nx !== 0 && dx !== 0) d = ((nx < 0 ? tx : tx + 1) - x) / dx;
+            else if (ny !== 0 && dy !== 0)
+              d = ((ny < 0 ? ty : ty + 1) - y) / dy;
+            return { d: clamp(d, 0, len), nx, ny };
+          }
+          ptx = tx;
+          pty = ty;
+          t = nt;
+        }
+        return null;
+      }
+
+      // =====================================================================
+      //  게임 상태
+      // =====================================================================
+      let bestChain = 0,
+        simTime = 0,
+        hitStopT = 0,
+        shake = 0,
+        kills = 0,
+        runTime = 0,
+        cleared = false,
+        arenaOpen = false;
+      const particles = [],
+        ghosts = [],
+        bullets = [],
+        toasts = [];
+      const cam = { x: 6, y: 10 };
+
+      const CHECKPOINTS = [{ x: 6, y: 3.5 }];
+      let cpIndex = 0;
+      const GOAL = { x: -100, y: -100 }; // 훈련장엔 골 없음
+
+      const HINTS = [
+        { x: 9, y: 9.0, t: "훈련장 — 허수아비는 쓰러져도 금방 다시 나온다" },
+        {
+          x: 9,
+          y: 8.2,
+          t: "좌클릭 베기 돌진 · 우클릭 팔 발사 · 날아가는 중 Space 슬링샷 · Shift 슬로우",
+        },
+        {
+          x: 9,
+          y: 7.4,
+          t: "노란 고리 = 팔 전용 앵커 · 초록 링을 순서대로 통과해 기록을 재보자",
+        },
+      ];
+
+      // ---------- 플레이어 ----------
+      const P = {
+        x: 0,
+        y: 0,
+        w: 0.6,
+        h: 0.9,
+        vx: 0,
+        vy: 0,
+        state: "normal",
+        grounded: false,
+        cw: { x: 0, y: 0 },
+        facing: 1,
+        coyote: 0,
+        jumpBuf: 0,
+        ctrlLock: 0,
+        dashCd: 0,
+        dashLeft: 0,
+        dx: 0,
+        dy: 0,
+        jumpCut: false,
+        airDashes: 0,
+        hp: 5,
+        maxHp: 5,
+        inv: 0,
+        dashBuf: 0,
+        dashEndT: 0,
+        slingArmed: false,
+        slingGrace: 0,
+        gdx: 0,
+        gdy: 0,
+        execT: 0,
+        dashExt: false,
+        dashHit: new Set(),
+        dashLanded: false,
+        dashT: 0,
+        atkCd: 0,
+        atkT: -1,
+        atkDx: 1,
+        atkDy: 0,
+        combo: 0,
+        lastAtk: -9,
+        atkHit: new Set(),
+        atkLanded: false,
+        chainEnd: 0,
+        chainEndT: 0,
+        chain: 0,
+        chainPop: 0,
+        dashRefreshFx: 0,
+        trav: null,
+        lastFall: 0,
+        crawling: false,
+        squash: 0,
+        ghostT: 0,
+        scarf: [],
+      };
+      // ---------- 공중 앵커 (팔 전용 발판) ----------
+      //  우클릭을 누르고 있으면 스윙, 떼면 그 자리로 당겨짐
+      const ANCHOR_DEFS = [
+        { x: 24, y: 19 },
+        { x: 36, y: 28 },
+        { x: 55, y: 13 },
+        { x: 70, y: 27 },
+        { x: 86, y: 19 },
+        { x: 14, y: 30 },
+        { x: 44, y: 39 },
+        { x: 32, y: 9 },
+        { x: 68, y: 9 },
+        { x: 90, y: 37 },
+        { x: 50, y: 24, amp: 6, spd: 0.8 },
+        { x: 78, y: 12, amp: 4, spd: 1.1 },
+        { x: 20, y: 40, amp: 5, spd: 0.9 },
+      ];
+      let anchors = ANCHOR_DEFS.map((a) => ({
+        ...a,
+        hx: a.x,
+        t: Math.random() * 6,
+      }));
+      function updateAnchors(dt) {
+        for (const a of anchors) {
+          a.t += dt;
+          if (a.amp) a.x = a.hx + Math.sin(a.t * a.spd) * a.amp;
+        }
+      }
+      const SWING = {
+        gravity: 42,
+        accel: 22,
+        reel: 9,
+        minLen: 2.2,
+        maxSpeed: 30,
+        releaseBoost: 1.08,
+        jumpBoost: 7,
+        holdToSwing: true,
+      };
+      // ---------- 이동 코스 (링 통과) ----------
+      const RING_DEFS = [
+        { x: 24, y: 22 },
+        { x: 36, y: 32 },
+        { x: 44, y: 42 },
+        { x: 55, y: 16 },
+        { x: 70, y: 31 },
+        { x: 86, y: 23 },
+        { x: 90, y: 40 },
+        { x: 68, y: 12 },
+        { x: 50, y: 27 },
+        { x: 32, y: 12 },
+        { x: 14, y: 33 },
+        { x: 8, y: 6 },
+      ];
+      let ringIdx = 0,
+        ringStart = -1,
+        ringBest = Infinity,
+        ringLast = 0,
+        ringT = 0;
+      // ---------- 팔 (갈고리) ----------
+      const ARM = {
+        state: "idle",
+        x: 0,
+        y: 0,
+        tx: 0,
+        ty: 0,
+        hook: null,
+        enemy: null,
+        cd: 0,
+        miss: false,
+        pullDist: 1,
+      };
+      // 조작 모드: false = 분리형(좌클릭 베기 / 우클릭 팔), true = 합체형(우클릭 하나로 이동+공격, 좌클릭 홀드 = 슬로우)
+      let MERGED = false;
+      let mana = 100,
+        slowOn = false,
+        slowLock = false,
+        slowRegenT = 0,
+        slowFx = 0;
+
+      // ---------- 적 ----------
+      const ENEMY_DEFS = [
+        // 바닥 허수아비
+        { type: "dummy", x: 12, y: 4.6 },
+        { type: "dummy", x: 36, y: 4.6 },
+        { type: "dummy", x: 56, y: 4.6 },
+        { type: "dummy", x: 72, y: 4.6 },
+        { type: "dummy", x: 90, y: 4.6 },
+        // 떠 있는 드론
+        { type: "drone", x: 30, y: 17 },
+        { type: "drone", x: 42, y: 23 },
+        { type: "drone", x: 57, y: 23 },
+        { type: "drone", x: 69, y: 17 },
+        { type: "drone", x: 49.5, y: 29 },
+        { type: "drone", x: 22, y: 24 },
+        { type: "drone", x: 78, y: 24 },
+        // 좌우로 움직이는 드론
+        { type: "drone", x: 49, y: 10, amp: 7, spd: 0.9 },
+        { type: "drone", x: 88, y: 34, amp: 5, spd: 1.2 },
+      ];
+      const KIND = {
+        dummy: { hp: 2, r: 0.45, respawn: 1.5, contact: 0, color: "#c9a96e" },
+        drone: { hp: 2, r: 0.5, respawn: 2, contact: 0, color: "#e5a24a" },
+        chaser: { hp: 2, r: 0.45, respawn: 0, contact: 1, color: "#ff5a64" },
+        walker: { hp: 4, r: 0.45, respawn: 0, contact: 1, color: "#ff7a4a" },
+        turret: { hp: 4, r: 0.5, respawn: 0, contact: 0, color: "#ff4d8d" },
+      };
+      let enemies = [];
+      function makeEnemy(d) {
+        const k = KIND[d.type];
+        return {
+          ...d,
+          hx: d.x,
+          hy: d.y,
+          hp: k.hp,
+          max: k.hp,
+          r: k.r,
+          w: 0.8,
+          h: 0.8,
+          alive: true,
+          vx: 0,
+          vy: 0,
+          ox: 0,
+          oy: 0,
+          kvx: 0,
+          kvy: 0,
+          flash: 0,
+          stun: 0,
+          t: Math.random() * 6,
+          dir: -1,
+          fire: 1 + Math.random(),
+          aim: Math.PI,
+          respawnAt: null,
+        };
+      }
+      function reviveEnemy(e) {
+        Object.assign(e, makeEnemy(e));
+        e.x = e.hx;
+        e.y = e.hy;
+      }
+
+      // =====================================================================
+      //  플레이어 로직 (PlayerController.cs 포팅)
+      // =====================================================================
+      function refill() {
+        P.airDashes = C.maxAirDashes;
+      }
+      // 처치(처형): 돌진 쿨 즉시 초기화 + 마나 회복 / 그냥 적중: 쿨 절반
+      function onHitResult(e) {
+        if (!e.alive) {
+          P.dashCd = 0;
+          ARM.cd = 0;
+          refill();
+          P.dashKilled = true;
+          P.execT = MD.execWindow;
+          mana = Math.min(SLOW.max, mana + SLOW.killRefund);
+          P.dashRefreshFx = 0.22;
+          hitStopT = Math.max(hitStopT, 0.08);
+          shake = Math.max(shake, 0.14);
+          particles.push({ ring: true, x: e.x, y: e.y, life: 0.25, max: 0.25 });
+          addChain();
+        }
+        // 못 죽이면 쿨 그대로, 연계도 안 오름
+      }
+      function addChain() {
+        if (P.grounded) return;
+        P.chain++;
+        P.chainPop = 1;
+        if (P.chain > bestChain) bestChain = P.chain;
+      }
+      function land() {
+        if (P.chain > 0) {
+          P.chainEnd = P.chain;
+          P.chainEndT = 1.0;
+        }
+        P.chain = 0;
+        if (P.state !== "normal" || !P.grounded)
+          P.squash = Math.min(0.35, P.lastFall / 45);
+        P.state = "normal";
+        P.grounded = true;
+        P.coyote = C.coyote;
+        P.vx = 0;
+        P.vy = 0;
+        refill();
+      }
+      function cling(w) {
+        P.state = "cling";
+        P.cw = { x: w.x, y: w.y };
+        P.grounded = false;
+        P.vx = P.vy = 0;
+        P.jumpBuf = 0;
+        refill();
+        if (w.x !== 0) P.facing = w.x;
+        burst(
+          P.x + (w.x * P.w) / 2,
+          P.y + (w.y * P.h) / 2,
+          6,
+          "#9fdcff",
+          4,
+          0.25,
+          0.06,
+          -w.x,
+          -w.y,
+          1.4,
+          0,
+        );
+      }
+      function stopOnSurface(w) {
+        if (w.x) moveAxis(P, w.x * 0.1, 0);
+        if (w.y) moveAxis(P, w.y * 0.1, 1);
+        P.vx = P.vy = 0;
+        refill();
+        if (w.y !== -1 && !C.spearCling) {
+          P.state = "normal";
+          P.grounded = false;
+          return;
+        }
+        if (w.y === -1) {
+          land();
+          burst(P.x, P.y - P.h / 2, 7, "#8b93a8", 4, 0.3, 0.06, 0, 1, 1.2, 8);
+        } else if (w.y === 1 && !C.clingCeiling) {
+          P.state = "normal";
+          P.grounded = false;
+        } else cling(w);
+      }
+      function settleOnSurface(w) {
+        const e = { x: P.x, y: P.y, w: P.w, h: P.h };
+        const hh = move(e, w.x * 1.5, w.y * 1.5);
+        if (hh.x === w.x && hh.y === w.y) {
+          P.x = e.x;
+          P.y = e.y;
+        }
+        if (touching(P, w)) stopOnSurface(w);
+        else {
+          P.state = "normal";
+          P.grounded = false;
+          P.vx = P.vy = 0;
+        }
+      }
+      function resolveDashDir(ax, ay) {
+        const l = hyp(ax, ay);
+        if (l < 1e-2) return null;
+        let dx = ax / l,
+          dy = ay / l,
+          sx = 0,
+          sy = 0;
+        if (P.state === "cling") {
+          sx = P.cw.x;
+          sy = P.cw.y;
+        } else if (P.grounded) {
+          sy = -1;
+        }
+        if (sx === 0 && sy === 0) return { x: dx, y: dy };
+        const into = dx * sx + dy * sy;
+        if (into <= 0) return { x: dx, y: dy };
+        if (into > Math.sin((C.snapAngle * Math.PI) / 180)) return null;
+        dx -= sx * into;
+        dy -= sy * into;
+        const m = hyp(dx, dy);
+        return { x: dx / m, y: dy / m };
+      }
+      function canDash() {
+        return (
+          P.dashCd <= 0 &&
+          P.state !== "dash" &&
+          P.state !== "travel" &&
+          (P.grounded || P.state === "cling" || P.airDashes > 0)
+        );
+      }
+      // 커서 방향 원뿔 안에서 가장 알맞은 적 (시야가 막힌 적 제외)
+      function findLockTarget() {
+        const a = aimDir(),
+          cosMin = Math.cos((MD.lockAngle * Math.PI) / 180);
+        let best = null,
+          bestScore = Infinity;
+        for (const e of enemies) {
+          if (!e.alive) continue;
+          const dx = e.x - P.x,
+            dy = e.y - P.y,
+            d = hyp(dx, dy);
+          // 처형 연쇄: 처형 직후엔 처형 가능한 적(화면 안)을 더 멀리서도 잡음
+          const ext =
+            P.execT > 0 &&
+            canExecute(e) &&
+            Math.abs(e.x - cam.x) < VW / 2 / SC &&
+            Math.abs(e.y - cam.y) < VH / 2 / SC;
+          if (d > (ext ? MD.execRange : MD.lockRange) || d < 0.2) continue;
+          const cos = (dx * a.x + dy * a.y) / d;
+          if (cos < cosMin) continue;
+          if (rayTiles(P.x, P.y, dx / d, dy / d, Math.max(0, d - 0.3)))
+            continue;
+          // 거리 우선(같은 방향이면 가까운 적 먼저), 각도는 살짝만 반영
+          let score = d * (1 + 0.35 * (1 - cos));
+          // 처형 가능한 적(빨간 마름모)이 사거리 안에 있으면 무조건 그쪽 먼저
+          if (canExecute(e)) score -= 1000;
+          if (score < bestScore) {
+            bestScore = score;
+            best = e;
+            best._ext = ext && d > MD.lockRange;
+          }
+        }
+        return best;
+      }
+      function tryDash() {
+        if (!canDash()) return false;
+        const t = findLockTarget();
+        let ax,
+          ay,
+          dist = MD.freeDist,
+          cd = MD.freeCd;
+        if (t) {
+          ax = t.x - P.x;
+          ay = t.y - P.y;
+          dist = clamp(
+            hyp(ax, ay) + MD.pass,
+            MD.dist,
+            t._ext ? MD.execMaxDist : MD.maxDist,
+          );
+          cd = C.dashCd;
+        }
+        // 대상이 있으면 커서와 상관없이 그 적 방향으로 (땅에 서 있어도 아래쪽 적 허용)
+        else {
+          ax = mouse.x - P.x;
+          ay = mouse.y - P.y;
+        }
+        const d = t
+          ? { x: ax / hyp(ax, ay), y: ay / hyp(ax, ay) }
+          : resolveDashDir(ax, ay);
+        if (!d) {
+          burst(P.x, P.y - 0.3, 3, "#ff5a6a", 2, 0.2, 0.05, 0, 0, 6.3, 0);
+          return false;
+        }
+        P.dx = d.x;
+        P.dy = d.y;
+        if (!P.grounded && P.state !== "cling") P.airDashes--;
+        P.dashLeft = dist;
+        P.dashCd = cd;
+        P.state = "dash";
+        P.grounded = false;
+        P.dashKilled = false;
+        P.zip = false;
+        P.dashExt = !!(t && t._ext);
+        if (P.dashExt) {
+          shake = Math.max(shake, 0.08);
+          P.execT = 0;
+        }
+        P.dashHit = new Set();
+        P.dashLanded = false;
+        P.dashT = 0;
+        if (d.x !== 0) P.facing = d.x > 0 ? 1 : -1;
+        burst(P.x, P.y, 8, "#bfe9ff", 6, 0.22, 0.05, -d.x, -d.y, 0.9, 0);
+        return true;
+      }
+      function dashHits(ax, ay, bx, by) {
+        for (const e of enemies) {
+          if (!e.alive || P.dashHit.has(e)) continue;
+          if (segDist(e.x, e.y, ax, ay, bx, by) > MD.hitR + e.r) continue;
+          P.dashHit.add(e);
+          const bonus = isMarked(e) ? MARK.bonus : 0;
+          e.markUntil = 0;
+          damageEnemy(e, MD.dmg + bonus, P.dx * MD.kb, P.dy * MD.kb);
+          slash(e.x, e.y, P.dx, P.dy);
+          particles.push({
+            ring: true,
+            x: e.x,
+            y: e.y,
+            life: 0.18,
+            max: 0.18,
+            color: "255,246,228",
+          });
+          hitStopT = Math.max(hitStopT, MD.hitStop);
+          shake = Math.max(shake, 0.12);
+          P.dashLanded = true;
+          onHitResult(e);
+        }
+        for (let i = bullets.length - 1; i >= 0; i--) {
+          const b = bullets[i];
+          if (segDist(b.x, b.y, ax, ay, bx, by) > MD.hitR + 0.15) continue;
+          burst(b.x, b.y, 8, "#9fdcff", 6, 0.25, 0.05, P.dx, P.dy, 1.4, 0);
+          bullets.splice(i, 1);
+        }
+      }
+      function startTravel(tx, ty, wall, speed, arrive) {
+        if (P.state === "travel") return false;
+        P.trav = {
+          tx,
+          ty,
+          wall,
+          speed,
+          arrive: Math.max(0, arrive || 0),
+          dx: 0,
+          dy: 0,
+        };
+        const l = hyp(tx - P.x, ty - P.y) || 1;
+        P.trav.dx = (tx - P.x) / l;
+        P.trav.dy = (ty - P.y) / l;
+        P.state = "travel";
+        P.grounded = false;
+        P.vx = P.vy = 0;
+        P.jumpCut = false;
+        P.slingArmed = false;
+        P.slingGrace = 0;
+        return true;
+      }
+      function knockPlayer(vx, vy) {
+        P.state = "normal";
+        P.vx = vx;
+        P.vy = vy;
+        P.grounded = false;
+        P.coyote = 0;
+        P.ctrlLock = 0.2;
+        P.jumpCut = false;
+      }
+
+      function tickNormal(dt) {
+        const h = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+        const over =
+          !P.grounded &&
+          Math.abs(P.vx) > C.moveSpeed &&
+          (Math.abs(h) < 0.01 || Math.sign(h) === Math.sign(P.vx));
+        if (over)
+          P.vx = moveTowards(
+            P.vx,
+            Math.sign(P.vx) * C.moveSpeed,
+            C.airOverDecel * dt,
+          );
+        else {
+          const acc =
+            (P.grounded ? C.groundAccel : C.airAccel) *
+            (P.ctrlLock > 0 ? 0.15 : 1) *
+            dt;
+          P.vx += clamp(h * C.moveSpeed - P.vx, -acc, acc);
+        }
+
+        if (P.jumpBuf > 0 && P.coyote > 0) {
+          P.vy = C.jumpSpeed;
+          P.jumpBuf = 0;
+          P.coyote = 0;
+          P.grounded = false;
+          P.jumpCut = true;
+          burst(P.x, P.y - P.h / 2, 5, "#8b93a8", 3, 0.25, 0.05, 0, 1, 1.4, 6);
+        }
+        if (P.vy <= 0) P.jumpCut = false;
+        const g = P.jumpCut && !keys.Space ? C.gravity * 2 : C.gravity;
+        P.vy = Math.max(P.vy - g * dt, -C.maxFall);
+        P.lastFall = Math.max(0, -P.vy);
+
+        const wasG = P.grounded;
+        const hit = move(P, P.vx * dt, P.vy * dt);
+        if (hit.x) P.vx = 0;
+        if (hit.y) P.vy = 0;
+        P.grounded = hit.y === -1;
+        if (P.grounded) {
+          if (!wasG) {
+            P.squash = Math.min(0.35, P.lastFall / 45);
+            if (P.lastFall > 12)
+              burst(
+                P.x,
+                P.y - P.h / 2,
+                8,
+                "#8b93a8",
+                4,
+                0.3,
+                0.06,
+                0,
+                1,
+                1.4,
+                8,
+              );
+          }
+          P.coyote = C.coyote;
+          refill();
+          if (P.chain > 0) {
+            P.chainEnd = P.chain;
+            P.chainEndT = 1.0;
+          }
+          P.chain = 0;
+        }
+        if (Math.abs(h) > 0.1 && P.ctrlLock <= 0) P.facing = h > 0 ? 1 : -1;
+      }
+      function tickDash(dt) {
+        const step = Math.min(
+          P.dashLeft,
+          (P.zip ? GR.zipSpeed : MD.speed) * dt,
+        );
+        const fx = P.x,
+          fy = P.y;
+        const r = castAlong(P.x, P.y, P.w, P.h, P.dx, P.dy, step);
+        P.x += P.dx * r.d;
+        P.y += P.dy * r.d;
+        P.dashLeft -= step;
+        P.dashT += dt;
+        addGhost();
+        dashHits(fx, fy, P.x, P.y);
+        if (r.wall) {
+          // 벽에는 붙지 않고 멈춤 (바닥이면 착지)
+          if (r.wall.y === -1) {
+            moveAxis(P, -0.1, 1);
+            P.lastFall = MD.speed * Math.max(0, -P.dy);
+            land();
+          } else {
+            P.state = "normal";
+            P.vx = 0;
+            P.vy = Math.max(0, P.dy * 4);
+            P.dashEndT = M.dashJumpWindow;
+          }
+          shake = Math.max(shake, 0.03);
+          return;
+        }
+        if (P.dashLeft <= 0) {
+          P.state = "normal";
+          P.vx = P.dx * MD.exitSpeed;
+          P.vy = P.dy * MD.exitSpeed;
+          P.jumpCut = false;
+          P.dashEndT = M.dashJumpWindow;
+          if (P.dashKilled)
+            P.vy = Math.max(P.vy, MD.airPop); // 처형했을 때만 떠서 이어감
+          else if (P.dashLanded) {
+            P.vx = -P.dx * MD.recoil;
+            P.vy = 3;
+            P.ctrlLock = 0.15;
+          } // 못 죽이면 튕겨 나옴
+        }
+      }
+      function tickCling(dt) {
+        const w = P.cw;
+        P.vx = P.vy = 0;
+        if (!touching(P, w)) {
+          P.state = "normal";
+          return;
+        }
+        if (P.jumpBuf > 0) {
+          P.jumpBuf = 0;
+          P.state = "normal";
+          P.vx = -w.x * C.detachAway;
+          P.vy = -w.y * C.detachAway;
+          if (w.y !== 1) P.vy += C.detachUp;
+          P.ctrlLock = C.detachLock;
+          P.jumpCut = false;
+          return;
+        }
+        if (C.crawl <= 0) return;
+        const ix = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0),
+          iy = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
+        const tx = -w.y,
+          ty = w.x,
+          along = ix * tx + iy * ty;
+        if (Math.abs(along) < 0.2) return;
+        const bx = P.x,
+          by = P.y,
+          sx = tx * Math.sign(along),
+          sy = ty * Math.sign(along);
+        const hit = move(P, sx * C.crawl * dt, sy * C.crawl * dt);
+        P.crawling = true;
+        P.lastFall = 0;
+        if (hit.y === -1) {
+          land();
+          return;
+        }
+        if (hit.x || hit.y) {
+          if (hit.y === 1 && !C.clingCeiling) return;
+          cling({ x: hit.x, y: hit.y });
+          return;
+        }
+        if (!touching(P, w)) {
+          if (!wrapCorner(w, sx, sy)) {
+            P.x = bx;
+            P.y = by;
+          }
+        }
+      }
+      function wrapCorner(w, tx, ty) {
+        const len = Math.abs(P.w * w.x) + Math.abs(P.h * w.y) + 0.02;
+        const e = { x: P.x, y: P.y, w: P.w, h: P.h };
+        const h1 = move(e, w.x * len, w.y * len);
+        if (h1.x || h1.y) return false;
+        const nw = { x: -tx || 0, y: -ty || 0 };
+        if (nw.y === 1 && !C.clingCeiling) return false;
+        const h2 = move(e, -tx * 0.5, -ty * 0.5);
+        if (!(h2.x === nw.x && h2.y === nw.y)) return false;
+        P.x = e.x;
+        P.y = e.y;
+        if (nw.y === -1) land();
+        else cling(nw);
+        return true;
+      }
+      function tickTravel(dt) {
+        const tr = P.trav;
+        const dx = tr.tx - P.x,
+          dy = tr.ty - P.y,
+          rem = hyp(dx, dy);
+        if (rem <= tr.arrive + 1e-3) {
+          arriveTravel();
+          return;
+        }
+        tr.dx = dx / rem;
+        tr.dy = dy / rem;
+        const want = rem - tr.arrive,
+          step = Math.min(want, tr.speed * dt);
+        const r = castAlong(P.x, P.y, P.w, P.h, tr.dx, tr.dy, step);
+        P.x += tr.dx * r.d;
+        P.y += tr.dy * r.d;
+        addGhost();
+        if (tr.dx !== 0) P.facing = tr.dx > 0 ? 1 : -1;
+        if (r.wall) {
+          const near = want - r.d <= C.travelTol;
+          if (near && tryArriveSling()) return;
+          stopOnSurface(r.wall);
+          P.slingGrace = GR.grace;
+          P.gdx = tr.dx;
+          P.gdy = tr.dy;
+          P.gw = r.wall;
+          onTravelEnded(near);
+          return;
+        }
+        if (r.d >= want - 1e-4) arriveTravel();
+      }
+      // 벽 도착 순간 Space를 누르고 있었으면 붙지 않고 바로 완벽 슬링샷
+      function tryArriveSling() {
+        const tr = P.trav;
+        if (!tr.wall || !(P.slingArmed || keys.Space)) return false;
+        doSling(tr.dx, tr.dy, true, tr.wall);
+        return true;
+      }
+      function doSling(dx, dy, perfect, wall) {
+        if (wall) {
+          // 벽에 도착한 순간이면 벽으로 박히지 않게, 벽을 따라 미끄러지는 방향 + 위쪽으로 튕김
+          const into = dx * wall.x + dy * wall.y;
+          if (into > 0) {
+            dx -= wall.x * into;
+            dy -= wall.y * into;
+          }
+          dx -= wall.x * 0.35;
+          dy += 0.35;
+          const l = hyp(dx, dy) || 1;
+          dx /= l;
+          dy /= l;
+        }
+        const sp = GR.slingSpeed * (perfect ? GR.perfectMul : 1);
+        P.state = "normal";
+        P.grounded = false;
+        P.jumpCut = false;
+        P.jumpBuf = 0;
+        P.vx = dx * sp;
+        P.vy = dy * sp + 3;
+        burst(P.x, P.y, 12, "#9fdcff", 7, 0.3, 0.06, -dx, -dy, 1.0, 0);
+        shake = Math.max(shake, perfect ? 0.1 : 0.06);
+        if (perfect) {
+          P.dashCd = 0;
+          refill();
+          P.dashRefreshFx = 0.22;
+          particles.push({
+            ring: true,
+            x: P.x,
+            y: P.y,
+            life: 0.25,
+            max: 0.25,
+            color: "127,215,255",
+          });
+          hitStopT = Math.max(hitStopT, 0.03);
+          addChain();
+        }
+        retractArm();
+        ARM.cd = 0;
+        P.slingArmed = false;
+        P.slingGrace = 0;
+        addChain();
+      }
+      function arriveTravel() {
+        const tr = P.trav;
+        if (tryArriveSling()) return;
+        if (tr.wall) {
+          settleOnSurface(tr.wall);
+          P.slingGrace = GR.grace;
+          P.gdx = tr.dx;
+          P.gdy = tr.dy;
+          P.gw = tr.wall;
+        } else {
+          P.state = "normal";
+          P.grounded = false;
+          P.vx = tr.dx * C.travelExit;
+          P.vy = tr.dy * C.travelExit;
+          P.jumpCut = false;
+        }
+        onTravelEnded(true);
+      }
+
+      function startSwing(an) {
+        P.state = "swing";
+        P.grounded = false;
+        P.jumpCut = false;
+        P.sw = { an, L: Math.max(SWING.minLen, hyp(P.x - an.x, P.y - an.y)) };
+        ARM.state = "hooked";
+      }
+      function releaseSwing(jump) {
+        P.state = "normal";
+        P.vx *= SWING.releaseBoost;
+        P.vy *= SWING.releaseBoost;
+        if (jump) {
+          P.vy = Math.max(P.vy, 0) + SWING.jumpBoost;
+          burst(P.x, P.y, 10, "#9fdcff", 6, 0.3, 0.06, -P.vx, -P.vy, 1.0, 0);
+        }
+        retractArm();
+        ARM.cd = 0;
+        addChain();
+      }
+      function tickSwing(dt) {
+        const an = P.sw.an;
+        if (!mouse.b[1]) {
+          releaseSwing(false);
+          return;
+        }
+        if (P.jumpBuf > 0) {
+          P.jumpBuf = 0;
+          releaseSwing(true);
+          return;
+        }
+        // W/S: 줄 감기/풀기
+        const iy = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
+        P.sw.L = clamp(P.sw.L - iy * SWING.reel * dt, SWING.minLen, GR.range);
+        let nx = P.x - an.x,
+          ny = P.y - an.y;
+        let d = hyp(nx, ny) || 1;
+        nx /= d;
+        ny /= d;
+        // 중력 + A/D로 진자 가속 (줄에 수직 방향)
+        P.vy -= SWING.gravity * dt;
+        const tx = -ny,
+          ty = nx,
+          ix = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+        // A/D를 줄의 접선 방향으로 투영해서 밀어줌
+        const push = ix * Math.sign(tx || 1);
+        if (ix) {
+          P.vx += tx * push * SWING.accel * dt;
+          P.vy += ty * push * SWING.accel * dt;
+        }
+        const sp = hyp(P.vx, P.vy);
+        if (sp > SWING.maxSpeed) {
+          P.vx *= SWING.maxSpeed / sp;
+          P.vy *= SWING.maxSpeed / sp;
+        }
+        // 다음 위치를 줄 길이에 맞추고, 바깥으로 향하는 속도 제거
+        let px = P.x + P.vx * dt,
+          py = P.y + P.vy * dt;
+        let dx = px - an.x,
+          dy = py - an.y,
+          dd = hyp(dx, dy) || 1;
+        if (dd > P.sw.L) {
+          px = an.x + (dx / dd) * P.sw.L;
+          py = an.y + (dy / dd) * P.sw.L;
+          const ux = dx / dd,
+            uy = dy / dd,
+            vr = P.vx * ux + P.vy * uy;
+          if (vr > 0) {
+            P.vx -= ux * vr;
+            P.vy -= uy * vr;
+          }
+        }
+        const hit = move(P, px - P.x, py - P.y);
+        if (hit.x) P.vx = 0;
+        if (hit.y) {
+          P.vy = 0;
+          if (hit.y === -1) {
+            P.grounded = true;
+          }
+        }
+        if (P.vx) P.facing = P.vx > 0 ? 1 : -1;
+        if (sp > 14) addGhost();
+      }
+      function updatePlayer(dt) {
+        P.crawling = false;
+        P.coyote -= dt;
+        P.jumpBuf -= dt;
+        P.ctrlLock -= dt;
+        P.dashCd -= dt;
+        P.inv -= dt;
+        P.dashEndT -= dt;
+        if (P.execT > 0) P.execT -= dt;
+        if (pressed.Space) P.jumpBuf = C.jumpBuf;
+        // 대쉬 점프: 대쉬 중이거나 벽 없이 대쉬가 막 끝났을 때 Space
+        if (
+          M.dashJump &&
+          P.jumpBuf > 0 &&
+          (P.state === "dash" ||
+            (P.state === "normal" && P.dashEndT > 0 && !P.grounded))
+        ) {
+          P.jumpBuf = 0;
+          P.dashEndT = 0;
+          P.state = "normal";
+          P.grounded = false;
+          P.jumpCut = false;
+          P.vx = P.dx * M.dashJumpSpeed;
+          P.vy = Math.max(C.jumpSpeed * 0.85, P.dy * M.dashJumpSpeed + 6);
+          burst(
+            P.x,
+            P.y - P.h / 2,
+            10,
+            "#bfe9ff",
+            6,
+            0.3,
+            0.06,
+            -P.dx,
+            -1,
+            1.2,
+            0,
+          );
+          shake = Math.max(shake, 0.05);
+          addChain();
+        }
+        // 슬링샷 (편의 보정)
+        //  · 후반부(55% 이후)에 Space → 즉시 완벽 슬링샷
+        //  · 그 전에 Space → 예약. 바로 떼면 그때 일반 슬링샷, 꾹 누르고 있으면 80% 지점(또는 도착 순간)에 완벽 슬링샷
+        //  · 벽에 도착한 직후 0.15초 안에 Space → 완벽 슬링샷 (늦게 눌러도 봐줌)
+        if (P.state === "travel") {
+          const tr = P.trav;
+          const rem = hyp(tr.tx - P.x, tr.ty - P.y),
+            prog = clamp(1 - rem / Math.max(0.1, ARM.pullDist), 0, 1);
+          if (pressed.Space) {
+            P.jumpBuf = 0;
+            if (prog >= GR.perfectFrom) doSling(tr.dx, tr.dy, true);
+            else P.slingArmed = true;
+          } else if (P.slingArmed) {
+            if (!keys.Space) doSling(tr.dx, tr.dy, false);
+            else if (prog >= GR.autoAt) doSling(tr.dx, tr.dy, true);
+          }
+        } else if (P.slingGrace > 0) {
+          P.slingGrace -= dt;
+          if (pressed.Space) doSling(P.gdx, P.gdy, true, P.gw);
+        }
+        // 좌클릭 돌진. 돌진 중/쿨타임 직전에 누른 것도 잠깐 기억했다가 바로 이어서 나감
+        if (mouse.down[0] && !MERGED) P.dashBuf = 0.2;
+        if (P.dashBuf > 0) {
+          P.dashBuf -= dt;
+          if (canDash()) {
+            tryDash();
+            P.dashBuf = 0;
+          }
+        }
+        switch (P.state) {
+          case "normal":
+            tickNormal(dt);
+            break;
+          case "dash":
+            tickDash(dt);
+            break;
+          case "cling":
+            tickCling(dt);
+            break;
+          case "travel":
+            tickTravel(dt);
+            break;
+          case "swing":
+            tickSwing(dt);
+            break;
+        }
+        P.squash *= Math.exp(-10 * dt);
+        P.chainPop *= Math.exp(-12 * dt);
+        if (P.chainEndT > 0) P.chainEndT -= dt;
+        if (P.dashRefreshFx > 0) P.dashRefreshFx -= dt;
+        // 가시
+        if (touchSpikes()) spikeHit();
+        // 이동 코스 링
+        ringT += dt;
+        {
+          const r = RING_DEFS[ringIdx];
+          if (hyp(P.x - r.x, P.y - r.y) < 1.6) {
+            if (ringIdx === 0) ringStart = runTime;
+            particles.push({
+              ring: true,
+              x: r.x,
+              y: r.y,
+              life: 0.3,
+              max: 0.3,
+              color: "255,210,122",
+            });
+            ringIdx++;
+            if (ringIdx >= RING_DEFS.length) {
+              ringLast = runTime - ringStart;
+              if (ringLast < ringBest) ringBest = ringLast;
+              toast(
+                `코스 완주 ${ringLast.toFixed(2)}초` +
+                  (ringLast <= ringBest ? " — 최고 기록!" : ""),
+              );
+              ringIdx = 0;
+              ringStart = -1;
+            }
+          }
+        }
+        if (pressed.KeyR) {
+          ringIdx = 0;
+          ringStart = -1;
+          toast("코스 리셋");
+        }
+        // 체크포인트
+        for (let i = cpIndex + 1; i < CHECKPOINTS.length; i++) {
+          const c = CHECKPOINTS[i];
+          if (hyp(P.x - c.x, P.y - c.y) < 2) {
+            cpIndex = i;
+            toast("체크포인트");
+            burst(c.x, c.y + 0.6, 14, "#7fd7ff", 4, 0.5, 0.06, 0, 1, 3, -2);
+          }
+        }
+        // 골
+        if (
+          !cleared &&
+          Math.abs(P.x - GOAL.x) < 1 &&
+          Math.abs(P.y - (GOAL.y + 0.5)) < 1.5
+        ) {
+          cleared = true;
+          burst(GOAL.x, GOAL.y + 1.5, 40, "#ffe39a", 8, 1, 0.08, 0, 1, 6.3, 6);
+        }
+      }
+      function touchSpikes() {
+        const x0 = Math.floor(P.x - P.w / 2),
+          x1 = Math.floor(P.x + P.w / 2),
+          y0 = Math.floor(P.y - P.h / 2),
+          y1 = Math.floor(P.y + P.h / 2);
+        for (let ty = y0; ty <= y1; ty++)
+          for (let tx = x0; tx <= x1; tx++)
+            if (
+              get(tx, ty) === 2 &&
+              P.y - P.h / 2 < ty + 0.55 &&
+              P.x + P.w / 2 > tx + 0.1 &&
+              P.x - P.w / 2 < tx + 0.9
+            )
+              return true;
+        return false;
+      }
+      function spikeHit() {
+        burst(P.x, P.y, 16, "#ff5a64", 7, 0.5, 0.07, 0, 1, 6.3, 10);
+        P.hp -= 1;
+        shake = 0.3;
+        if (P.hp <= 0) {
+          die();
+          return;
+        }
+        toPoint(CHECKPOINTS[cpIndex]);
+        P.inv = 1;
+      }
+      function hurt(dmg, fromX) {
+        if (P.inv > 0 || P.state === "travel" || cleared) return;
+        P.hp -= dmg;
+        P.inv = 1;
+        shake = Math.max(shake, 0.22);
+        hitStopT = Math.max(hitStopT, 0.05);
+        burst(P.x, P.y, 12, "#ff5a64", 6, 0.4, 0.06, 0, 0, 6.3, 6);
+        if (P.hp <= 0) {
+          die();
+          return;
+        }
+        knockPlayer(Math.sign(P.x - fromX || 1) * 8, 7);
+      }
+      function toPoint(c) {
+        P.x = c.x;
+        P.y = c.y;
+        P.vx = P.vy = 0;
+        P.state = "normal";
+        P.grounded = false;
+        P.dashCd = 0;
+        refill();
+        resetArm();
+        cam.x = P.x;
+        cam.y = P.y;
+      }
+      function die() {
+        toast("쓰러짐 — 체크포인트에서 다시");
+        P.hp = P.maxHp;
+        toPoint(CHECKPOINTS[cpIndex]);
+        P.inv = 1.2;
+        bullets.length = 0;
+        if (!arenaOpen) {
+          for (const e of enemies) if (e.arena) reviveEnemy(e);
+        }
+        for (const e of enemies)
+          if (!e.arena && !e.alive && KIND[e.type].respawn === 0)
+            reviveEnemy(e);
+      }
+
+      // =====================================================================
+      //  우클릭: 팔 발사 (갈고리)
+      // =====================================================================
+      function aimDir() {
+        let dx = mouse.x - P.x,
+          dy = mouse.y - P.y;
+        const l = hyp(dx, dy);
+        if (l < 0.1) return { x: P.facing, y: 0 };
+        return { x: dx / l, y: dy / l };
+      }
+      const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+
+      // 꽂을 곳 찾기: 커서 근처 적 우선 → 커서 방향 벽 → 안 맞으면 각도를 조금씩 벌려서 찾음
+      function findHook() {
+        const a = aimDir(),
+          base = Math.atan2(a.y, a.x);
+        let best = null,
+          bestAng = Infinity;
+        // 공중 앵커: 커서 ±28° 안이면 최우선 (이동 중심)
+        for (const an of anchors) {
+          const dx = an.x - P.x,
+            dy = an.y - P.y,
+            d = hyp(dx, dy);
+          if (d > GR.range || d < 1.2) continue;
+          const ang = Math.abs(angDiff(Math.atan2(dy, dx), base));
+          if (ang > (GR.anchorCone * Math.PI) / 180) continue;
+          if (rayTiles(P.x, P.y, dx / d, dy / d, Math.max(0, d - 0.3)))
+            continue;
+          if (ang < bestAng) {
+            bestAng = ang;
+            best = { kind: "anchor", an, x: an.x, y: an.y, d };
+          }
+        }
+        if (best) return best;
+        for (const e of enemies) {
+          if (!e.alive) continue;
+          const dx = e.x - P.x,
+            dy = e.y - P.y,
+            d = hyp(dx, dy);
+          if (d > GR.range || d < 0.6) continue;
+          const ang = Math.abs(angDiff(Math.atan2(dy, dx), base));
+          if (ang > ((MERGED ? GR.mergedCone : GR.enemyCone) * Math.PI) / 180)
+            continue;
+          if (rayTiles(P.x, P.y, dx / d, dy / d, Math.max(0, d - 0.3)))
+            continue;
+          // 분리형: 커서에 가장 가까운 각도 / 합체형: 처형 가능 우선 → 가까운 순
+          const score = MERGED
+            ? d * (1 + 0.35 * (1 - Math.cos(ang))) - (canExecute(e) ? 1000 : 0)
+            : ang;
+          if (score < bestAng) {
+            bestAng = score;
+            best = { kind: "enemy", e, x: e.x, y: e.y, d };
+          }
+        }
+        if (best) return best;
+        for (let k = 0; k <= GR.assistSteps; k++) {
+          for (const sgn of k === 0 ? [1] : [1, -1]) {
+            const ang = base + (sgn * k * GR.assistStep * Math.PI) / 180,
+              dx = Math.cos(ang),
+              dy = Math.sin(ang);
+            const h = rayTiles(P.x, P.y, dx, dy, GR.range);
+            if (h && h.d > 0.7)
+              return {
+                kind: "wall",
+                x: P.x + dx * h.d,
+                y: P.y + dy * h.d,
+                nx: h.nx,
+                ny: h.ny,
+                d: h.d,
+              };
+          }
+        }
+        return null;
+      }
+      function updateArmInput() {
+        if (!mouse.down[1] || P.state === "travel") return;
+        if (!(ARM.state === "idle" || ARM.state === "retract") || ARM.cd > 0)
+          return;
+        const h = findHook();
+        ARM.x = P.x;
+        ARM.y = P.y;
+        ARM.state = "shoot";
+        if (!h) {
+          const a = aimDir();
+          ARM.miss = true;
+          ARM.hook = null;
+          ARM.enemy = null;
+          ARM.tx = P.x + a.x * GR.range;
+          ARM.ty = P.y + a.y * GR.range;
+          return;
+        }
+        ARM.miss = false;
+        ARM.hook = h;
+        ARM.enemy = h.kind === "enemy" ? h.e : null;
+        ARM.tx = h.x;
+        ARM.ty = h.y;
+      }
+      function updateArm(dt) {
+        if (ARM.cd > 0) ARM.cd -= dt;
+        if (ARM.enemy && !ARM.enemy.alive) ARM.enemy = null;
+        if (ARM.state === "shoot") {
+          if (ARM.hook && ARM.hook.kind === "enemy") {
+            if (!ARM.enemy) {
+              retractArm();
+              return;
+            }
+            ARM.tx = ARM.enemy.x;
+            ARM.ty = ARM.enemy.y;
+          }
+          if (ARM.hook && ARM.hook.kind === "anchor") {
+            ARM.tx = ARM.hook.an.x;
+            ARM.ty = ARM.hook.an.y;
+          }
+          const fast = MERGED && ARM.hook && ARM.hook.kind === "enemy";
+          const dx = ARM.tx - ARM.x,
+            dy = ARM.ty - ARM.y,
+            d = hyp(dx, dy),
+            st = (fast ? GR.mergedArmSpeed : GR.armSpeed) * dt;
+          if (d <= st) {
+            ARM.x = ARM.tx;
+            ARM.y = ARM.ty;
+            if (ARM.miss) {
+              retractArm();
+              ARM.cd = GR.missCd;
+              burst(ARM.x, ARM.y, 3, "#8b93a8", 2, 0.15, 0.04, 0, 0, 6.3, 0);
+            } else beginPull();
+          } else {
+            ARM.x += (dx / d) * st;
+            ARM.y += (dy / d) * st;
+          }
+        } else if (ARM.state === "hooked") {
+          if (ARM.enemy) {
+            ARM.x = ARM.enemy.x;
+            ARM.y = ARM.enemy.y;
+            if (P.trav) {
+              P.trav.tx = ARM.enemy.x;
+              P.trav.ty = ARM.enemy.y;
+            }
+          }
+          if (ARM.hook && ARM.hook.kind === "anchor") {
+            const an = ARM.hook.an;
+            ARM.x = an.x;
+            ARM.y = an.y;
+            if (P.state === "travel" && P.trav) {
+              P.trav.tx = an.x;
+              P.trav.ty = an.y;
+            }
+          }
+          if (P.state !== "travel" && P.state !== "swing") retractArm();
+        } else if (ARM.state === "retract") {
+          const dx = P.x - ARM.x,
+            dy = P.y - ARM.y,
+            d = hyp(dx, dy),
+            st = GR.retractSpeed * dt;
+          if (d <= Math.max(st, 0.4)) ARM.state = "idle";
+          else {
+            ARM.x += (dx / d) * st;
+            ARM.y += (dy / d) * st;
+          }
+        }
+      }
+      // 합체형: 적에 꽂히면 끌려가는 대신 그 적을 관통하며 벰 (베기 돌진과 같은 판정·처형 규칙)
+      function zipSlash(e) {
+        const dx = e.x - P.x,
+          dy = e.y - P.y,
+          d = hyp(dx, dy) || 1;
+        P.dx = dx / d;
+        P.dy = dy / d;
+        P.dashLeft = d + MD.pass;
+        P.state = "dash";
+        P.grounded = false;
+        P.dashHit = new Set();
+        P.dashLanded = false;
+        P.dashKilled = false;
+        P.dashExt = false;
+        P.dashT = 0;
+        P.zip = true;
+        if (P.dx !== 0) P.facing = P.dx > 0 ? 1 : -1;
+        retractArm();
+        ARM.cd = GR.cd;
+        refill();
+        burst(P.x, P.y, 8, "#bfe9ff", 6, 0.22, 0.05, -P.dx, -P.dy, 0.9, 0);
+        shake = Math.max(shake, 0.05);
+      }
+      function beginPull() {
+        const h = ARM.hook;
+        if (MERGED && ARM.enemy) {
+          zipSlash(ARM.enemy);
+          return;
+        }
+        if (h && h.kind === "anchor") {
+          ARM.state = "hooked";
+          refill();
+          P.dashCd = Math.min(P.dashCd, 0);
+          P.dashRefreshFx = 0.18;
+          burst(ARM.x, ARM.y, 7, "#ffd27a", 4, 0.2, 0.05, 0, 0, 6.3, 0);
+          startTravel(h.an.x, h.an.y, null, GR.pullSpeed, 0.7);
+          ARM.pullDist = Math.max(0.1, hyp(h.an.x - P.x, h.an.y - P.y));
+          return;
+        }
+        let ok, tx, ty;
+        if (ARM.enemy) {
+          tx = ARM.enemy.x;
+          ty = ARM.enemy.y;
+          ok = startTravel(
+            tx,
+            ty,
+            null,
+            GR.pullSpeed,
+            SPC.strikeArrive + ARM.enemy.r,
+          );
+        } else {
+          const w = round4(-h.nx, -h.ny),
+            nx = -w.x,
+            ny = -w.y;
+          const half = Math.abs((P.w / 2) * nx) + Math.abs((P.h / 2) * ny);
+          tx = h.x + nx * (half + 0.03);
+          ty = h.y + ny * (half + 0.03);
+          for (
+            let k = 0;
+            k < 8 && overlap(tx, ty, P.w * 0.95, P.h * 0.95);
+            k++
+          ) {
+            tx += nx * 0.15;
+            ty += ny * 0.15;
+          }
+          ok = startTravel(tx, ty, w, GR.pullSpeed, 0);
+        }
+        if (!ok) {
+          retractArm();
+          return;
+        }
+        ARM.state = "hooked";
+        ARM.pullDist = Math.max(0.1, hyp(tx - P.x, ty - P.y));
+        // 팔이 꽂히는 순간 공중 베기 돌진 1회 회복 (쿨타임도 비움)
+        refill();
+        P.dashCd = Math.min(P.dashCd, 0);
+        P.dashRefreshFx = 0.18;
+        burst(
+          ARM.x,
+          ARM.y,
+          7,
+          "#9fdcff",
+          4,
+          0.2,
+          0.05,
+          -(ARM.x - P.x),
+          -(ARM.y - P.y),
+          1.4,
+          0,
+        );
+        shake = Math.max(shake, 0.04);
+      }
+      function retractArm() {
+        if (ARM.state !== "idle") ARM.state = "retract";
+        ARM.enemy = null;
+        ARM.hook = null;
+      }
+      function resetArm() {
+        ARM.state = "idle";
+        ARM.enemy = null;
+        ARM.hook = null;
+        ARM.cd = 0;
+      }
+      function onTravelEnded(reached) {
+        if (ARM.state !== "hooked") return;
+        const en = ARM.enemy;
+        if (reached && en && en.alive) strike(en);
+        retractArm();
+        ARM.cd = GR.cd;
+      }
+      // 표식: 다음 베기 데미지 +1 (처형 판정에도 반영)
+      const MARK = { dur: 2.5, bonus: 1, stun: 0.5 };
+      const isMarked = (e) => e.markUntil > simTime;
+      function canExecute(e) {
+        return e.hp <= MD.dmg + (isMarked(e) ? MARK.bonus : 0);
+      }
+      function strike(e) {
+        let dx = e.x - P.x,
+          dy = e.y - P.y;
+        const l = hyp(dx, dy);
+        if (l < 1e-3) {
+          dx = P.facing;
+          dy = 0;
+        } else {
+          dx /= l;
+          dy /= l;
+        }
+        if (!MERGED) {
+          // 분리형: 우클릭은 데미지 없음 → 경직 + 표식, 튕겨 올라서 바로 좌클릭으로 마무리
+          e.stun = Math.max(e.stun, MARK.stun);
+          e.markUntil = simTime + MARK.dur;
+          e.flash = 0.1;
+          e.kvx += dx * 4;
+          e.kvy += dy * 4;
+          P.vx = dx * C.travelExit * 0.4;
+          P.vy = SPC.strikeBounce * 0.8;
+          P.jumpCut = false;
+          P.inv = Math.max(P.inv, 0.25);
+          refill();
+          P.dashCd = 0;
+          hitStopT = Math.max(hitStopT, 0.04);
+          shake = Math.max(shake, 0.07);
+          particles.push({
+            ring: true,
+            x: e.x,
+            y: e.y,
+            life: 0.22,
+            max: 0.22,
+            color: "127,215,255",
+          });
+          return;
+        }
+        damageEnemy(e, SPC.strikeDmg, dx * SPC.strikeKb, dy * SPC.strikeKb);
+        hitStopT = Math.max(hitStopT, SPC.hitStop);
+        shake = Math.max(shake, SPC.shake);
+        P.vx = dx * C.travelExit * 0.5;
+        P.vy = SPC.strikeBounce;
+        P.jumpCut = false;
+        P.inv = Math.max(P.inv, 0.25);
+        slash(e.x, e.y, dx, dy);
+        onHitResult(e);
+      }
+
+      // =====================================================================
+      //  슬로우 (Shift)
+      // =====================================================================
+      function updateSlow(rdt) {
+        const want = !!(
+          keys.ShiftLeft ||
+          keys.ShiftRight ||
+          (MERGED && mouse.b[0])
+        );
+        if (!want) slowLock = false;
+        if (want && !slowOn && !slowLock && mana >= SLOW.minStart)
+          slowOn = true;
+        if (!want) slowOn = false;
+        if (slowOn) {
+          mana = Math.max(0, mana - SLOW.drain * rdt);
+          slowRegenT = SLOW.regenDelay;
+          if (mana <= 0) {
+            slowOn = false;
+            slowLock = true;
+          } // 다 쓰면 Shift를 다시 눌러야 함
+        } else if (slowRegenT > 0) slowRegenT -= rdt;
+        else mana = Math.min(SLOW.max, mana + SLOW.regen * rdt);
+        slowFx += ((slowOn ? 1 : 0) - slowFx) * Math.min(1, 14 * rdt);
+      }
+
+      // =====================================================================
+      //  적
+      // =====================================================================
+      function damageEnemy(e, dmg, kx, ky) {
+        if (!e.alive) return;
+        e.hp -= dmg;
+        e.flash = 0.1;
+        e.stun = 0.35;
+        if (e.type === "walker" || e.type === "chaser") {
+          e.vx = kx;
+          e.vy = ky + (e.type === "walker" ? 3 : 0);
+        } else {
+          e.kvx += kx * 1.2;
+          e.kvy += ky * 1.2;
+        }
+        burst(e.x, e.y, 6, "#fff1d8", 5, 0.18, 0.05, kx, ky, 1.2, 0);
+        if (e.hp <= 0) {
+          e.alive = false;
+          kills++;
+          e.respawnAt =
+            KIND[e.type].respawn > 0 ? simTime + KIND[e.type].respawn : null;
+          burst(e.x, e.y, 22, KIND[e.type].color, 8, 0.6, 0.08, 0, 0, 6.3, 6);
+          shake = Math.max(shake, 0.12);
+        }
+      }
+      function updateEnemies(dt) {
+        for (const e of enemies) {
+          if (!e.alive) {
+            if (e.respawnAt !== null && simTime >= e.respawnAt) reviveEnemy(e);
+            continue;
+          }
+          e.t += dt;
+          if (e.flash > 0) e.flash -= dt;
+          if (e.stun > 0) e.stun -= dt;
+          const pdx = P.x - e.x,
+            pdy = P.y - e.y,
+            pd = hyp(pdx, pdy);
+          switch (e.type) {
+            case "dummy":
+            case "drone":
+            case "turret": {
+              e.ox += e.kvx * dt;
+              e.oy += e.kvy * dt;
+              e.kvx *= Math.exp(-10 * dt);
+              e.kvy *= Math.exp(-10 * dt);
+              e.ox *= Math.exp(-4 * dt);
+              e.oy *= Math.exp(-4 * dt);
+              const bob = e.type === "turret" ? 0 : Math.sin(e.t * 2) * 0.22;
+              const sway = e.amp ? Math.sin(e.t * e.spd) * e.amp : 0;
+              e.x = e.hx + sway + e.ox;
+              e.y = e.hy + e.oy + bob;
+              if (e.type === "turret") {
+                e.fire -= dt;
+                const want = Math.atan2(pdy, pdx);
+                e.aim +=
+                  Math.atan2(Math.sin(want - e.aim), Math.cos(want - e.aim)) *
+                  Math.min(1, 6 * dt);
+                if (
+                  pd < 15 &&
+                  e.fire <= 0 &&
+                  !rayTiles(e.x, e.y, pdx / pd, pdy / pd, pd - 0.5)
+                ) {
+                  e.fire = 1.4;
+                  const bx = Math.cos(e.aim),
+                    by = Math.sin(e.aim);
+                  bullets.push({
+                    x: e.x + bx * 0.6,
+                    y: e.y + by * 0.6,
+                    vx: bx * 11,
+                    vy: by * 11,
+                    life: 3,
+                  });
+                }
+              }
+              break;
+            }
+            case "chaser": {
+              if (e.stun <= 0 && pd < 10) {
+                e.vx += (pdx / pd) * 13 * dt;
+                e.vy += (pdy / pd) * 13 * dt;
+              }
+              const sp = hyp(e.vx, e.vy),
+                max = e.stun > 0 ? 14 : 4.5;
+              if (sp > max) {
+                e.vx *= max / sp;
+                e.vy *= max / sp;
+              }
+              e.vx *= Math.exp(-1.5 * dt);
+              e.vy *= Math.exp(-1.5 * dt);
+              const nx = e.x + e.vx * dt,
+                ny = e.y + e.vy * dt + Math.sin(e.t * 3) * 0.01;
+              if (!solidAt(Math.floor(nx), Math.floor(ny))) {
+                e.x = nx;
+                e.y = ny;
+              } else {
+                e.vx *= -0.5;
+                e.vy *= -0.5;
+              }
+              break;
+            }
+            case "walker": {
+              if (e.stun <= 0) {
+                const ahead = e.x + e.dir * 0.55,
+                  foot = Math.floor(e.y - 0.5);
+                if (
+                  solidAt(Math.floor(ahead), Math.floor(e.y)) ||
+                  !solidAt(Math.floor(ahead), foot)
+                )
+                  e.dir *= -1;
+                const chase =
+                  pd < 7 && Math.abs(pdy) < 2 ? Math.sign(pdx) : e.dir;
+                if (
+                  chase !== e.dir &&
+                  solidAt(Math.floor(e.x + chase * 0.55), foot)
+                )
+                  e.dir = chase;
+                e.vx = e.dir * (pd < 7 ? 3.2 : 2.2);
+              } else e.vx *= Math.exp(-6 * dt);
+              e.vy = Math.max(e.vy - 40 * dt, -22);
+              const h = move(e, e.vx * dt, e.vy * dt);
+              if (h.y) e.vy = 0;
+              if (h.x && e.stun <= 0) e.dir *= -1;
+              if (e.y < 3) e.alive = false;
+              break;
+            }
+          }
+          if (
+            KIND[e.type].contact > 0 &&
+            Math.abs(pdx) < e.r + P.w / 2 &&
+            Math.abs(pdy) < e.r + P.h / 2
+          )
+            hurt(KIND[e.type].contact, e.x);
+        }
+        // 전투장 문
+        if (
+          !arenaOpen &&
+          enemies.filter((e) => e.arena).every((e) => !e.alive)
+        ) {
+          arenaOpen = true;
+          fill(DOOR.x0, DOOR.y0, DOOR.x1, DOOR.y1, 0);
+          toast("문이 열렸다");
+          for (let y = DOOR.y0; y <= DOOR.y1; y++)
+            burst(DOOR.x1, y + 0.5, 3, "#7fd7ff", 4, 0.6, 0.07, 0, 0, 6.3, 0);
+          shake = 0.2;
+        }
+      }
+      function updateBullets(dt) {
+        for (let i = bullets.length - 1; i >= 0; i--) {
+          const b = bullets[i];
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          b.life -= dt;
+          if (solidAt(Math.floor(b.x), Math.floor(b.y)) || b.life <= 0) {
+            burst(b.x, b.y, 4, "#ff7aa8", 3, 0.2, 0.04, 0, 0, 6.3, 0);
+            bullets.splice(i, 1);
+            continue;
+          }
+          if (
+            Math.abs(b.x - P.x) < P.w / 2 + 0.12 &&
+            Math.abs(b.y - P.y) < P.h / 2 + 0.12 &&
+            P.inv <= 0 &&
+            P.state !== "travel"
+          ) {
+            hurt(1, b.x - b.vx);
+            bullets.splice(i, 1);
+          }
+        }
+      }
+
+      // =====================================================================
+      //  이펙트
+      // =====================================================================
+      function burst(x, y, n, color, speed, life, size, dx, dy, spread, grav) {
+        const base = Math.atan2(dy, dx),
+          any = dx === 0 && dy === 0;
+        for (let i = 0; i < n; i++) {
+          const a = any
+            ? Math.random() * Math.PI * 2
+            : base + (Math.random() - 0.5) * spread;
+          const s = speed * (0.4 + Math.random() * 0.8);
+          particles.push({
+            x,
+            y,
+            vx: Math.cos(a) * s,
+            vy: Math.sin(a) * s,
+            life: life * (0.6 + Math.random() * 0.6),
+            max: life,
+            color,
+            size: size * (0.6 + Math.random() * 0.8),
+            g: grav || 0,
+          });
+        }
+      }
+      function slash(x, y, dx, dy) {
+        particles.push({
+          slash: true,
+          x,
+          y,
+          a: Math.atan2(dy, dx),
+          life: 0.16,
+          max: 0.16,
+        });
+        burst(x, y, 14, "#fff3dc", 9, 0.3, 0.06, dx, dy, 1.0, 0);
+      }
+      function addGhost() {
+        ghosts.push({
+          x: P.x,
+          y: P.y,
+          f: P.facing,
+          life: P.dashExt && P.state === "dash" ? 0.3 : 0.16,
+          max: P.dashExt && P.state === "dash" ? 0.3 : 0.16,
+          red: P.dashExt && P.state === "dash",
+        });
+      }
+      function toast(t) {
+        toasts.push({ t, life: 1.8 });
+      }
+      function updateFx(dt) {
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.life -= dt;
+          if (p.life <= 0) {
+            particles.splice(i, 1);
+            continue;
+          }
+          if (!p.slash && !p.swing && !p.streak && !p.ring) {
+            p.vy -= p.g * dt;
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.vx *= Math.exp(-3 * dt);
+            p.vy *= Math.exp(-3 * dt);
+          }
+        }
+        for (let i = ghosts.length - 1; i >= 0; i--) {
+          ghosts[i].life -= dt;
+          if (ghosts[i].life <= 0) ghosts.splice(i, 1);
+        }
+        for (let i = toasts.length - 1; i >= 0; i--) {
+          toasts[i].life -= dt;
+          if (toasts[i].life <= 0) toasts.splice(i, 1);
+        }
+      }
+
+      // =====================================================================
+      //  카메라 / 루프
+      // =====================================================================
+      function updateMouseWorld() {
+        mouse.x = (mouse.sx - VW / 2) / SC + cam.x;
+        mouse.y = (VH / 2 - mouse.sy) / SC + cam.y;
+      }
+      function updateCamera(rdt) {
+        const lx = clamp((mouse.x - P.x) * 0.15 + P.vx * 0.08, -4, 4),
+          ly = clamp((mouse.y - P.y) * 0.15, -3, 3);
+        const tx = P.x + lx,
+          ty = P.y + 1 + ly;
+        const k = 1 - Math.exp(-12 * rdt);
+        cam.x += (tx - cam.x) * k;
+        cam.y += (ty - cam.y) * k;
+        const hw = VW / 2 / SC,
+          hh = VH / 2 / SC;
+        cam.x = clamp(cam.x, hw, MW - hw);
+        cam.y = clamp(cam.y, hh, MH - hh);
+        shake *= Math.pow(0.001, rdt);
+      }
+
+      function handleToggles() {
+        if (pressed.Digit1) {
+          C.detachUp = C.detachUp ? 0 : 9;
+          toast("벽 떨어질 때 튀기: " + (C.detachUp ? "ON" : "OFF"));
+        }
+        if (pressed.Digit2) {
+          C.spearCling = !C.spearCling;
+          toast("팔 도착 시 벽 붙기: " + (C.spearCling ? "ON" : "OFF"));
+        }
+        if (pressed.Digit3) {
+          C.clingCeiling = !C.clingCeiling;
+          toast("천장 붙기: " + (C.clingCeiling ? "ON" : "OFF"));
+          if (!C.clingCeiling && P.state === "cling" && P.cw.y === 1)
+            P.state = "normal";
+        }
+        if (pressed.Digit4 || pressed.Tab) {
+          MERGED = !MERGED;
+          P.dashBuf = 0;
+          toast(
+            MERGED
+              ? "합체형: 우클릭 하나로 이동+베기 · 좌클릭 홀드 = 슬로우"
+              : "분리형: 좌클릭 베기 · 우클릭 팔",
+          );
+        }
+        if (pressed.Enter && cleared) restart();
+      }
+
+      let last = performance.now();
+      function frame(now) {
+        const rdt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        if (started) {
+          updateMouseWorld();
+          handleToggles();
+          updateSlow(rdt);
+          const ws = lerp(1, SLOW.world, slowFx),
+            ps = lerp(1, SLOW.player, slowFx); // 세상은 많이, 나는 조금 느려짐
+          if (hitStopT > 0) hitStopT -= rdt;
+          else {
+            const wdt = rdt * ws,
+              pdt = rdt * ps;
+            simTime += wdt;
+            if (!cleared) runTime += rdt;
+            updateArmInput();
+            updatePlayer(pdt);
+            updateArm(pdt);
+            updateAnchors(wdt);
+            updateEnemies(wdt);
+            updateBullets(wdt);
+          }
+          updateFx(rdt * ws);
+          updateScarf(rdt * ps);
+          updateCamera(rdt);
+        }
+        render();
+        for (const k in pressed) delete pressed[k];
+        mouse.down[0] = mouse.down[1] = false;
+        requestAnimationFrame(frame);
+      }
+
+      // =====================================================================
+      //  그리기
+      // =====================================================================
+      const sx = (x) => (x - cam.x) * SC + VW / 2 + shakeX;
+      const sy = (y) => VH / 2 - (y - cam.y) * SC + shakeY;
+      let shakeX = 0,
+        shakeY = 0;
+
+      // 배경 실루엣
+      const skyline = [[], []];
+      (function () {
+        let seed = 7;
+        const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+        for (let l = 0; l < 2; l++) {
+          let x = 0;
+          while (x < 400) {
+            const w = 3 + rnd() * 7,
+              h = 6 + rnd() * (l ? 22 : 14);
+            skyline[l].push({ x, w, h, win: rnd() });
+            x += w + rnd() * 2;
+          }
+        }
+      })();
+      function drawBackground() {
+        const g = ctx.createLinearGradient(0, 0, 0, VH);
+        g.addColorStop(0, "#0a0d18");
+        g.addColorStop(0.6, "#171127");
+        g.addColorStop(1, "#2a1426");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, VW, VH);
+        // 달
+        const mx = VW * 0.78 - cam.x * SC * 0.02,
+          my = VH * 0.22 + cam.y * SC * 0.01;
+        const mg = ctx.createRadialGradient(mx, my, 0, mx, my, SC * 6);
+        mg.addColorStop(0, "rgba(255,214,170,0.22)");
+        mg.addColorStop(1, "rgba(255,214,170,0)");
+        ctx.fillStyle = mg;
+        ctx.fillRect(mx - SC * 6, my - SC * 6, SC * 12, SC * 12);
+        ctx.fillStyle = "#f2d2b0";
+        ctx.beginPath();
+        ctx.arc(mx, my, SC * 1.6, 0, Math.PI * 2);
+        ctx.fill();
+        // 도시 실루엣 2겹
+        const layers = [
+          { f: 0.12, c: "#130f20", base: 0.92 },
+          { f: 0.3, c: "#0d0b17", base: 1.0 },
+        ];
+        for (let l = 0; l < 2; l++) {
+          const L = layers[l];
+          ctx.fillStyle = L.c;
+          const off = cam.x * L.f,
+            bw = SC * 0.9;
+          for (const b of skyline[l]) {
+            let x = (((b.x - off) % 400) + 400) % 400;
+            const px = x * bw - bw * 20,
+              ph = b.h * bw * 0.6;
+            if (px > VW || px + b.w * bw < 0) continue;
+            const by = VH * L.base - ph + (cam.y - 15) * SC * L.f * 0.5;
+            ctx.fillRect(px, by, b.w * bw, VH);
+            if (l === 1 && b.win > 0.5) {
+              ctx.fillStyle = "rgba(255,120,90,0.25)";
+              for (let wy = by + bw; wy < by + ph; wy += bw * 1.4)
+                ctx.fillRect(px + bw * 0.6, wy, bw * 0.25, bw * 0.35);
+              ctx.fillStyle = L.c;
+            }
+          }
+        }
+      }
+      function drawTiles() {
+        const x0 = Math.max(0, Math.floor(cam.x - VW / 2 / SC) - 1),
+          x1 = Math.min(MW - 1, Math.ceil(cam.x + VW / 2 / SC) + 1);
+        const y0 = Math.max(0, Math.floor(cam.y - VH / 2 / SC) - 1),
+          y1 = Math.min(MH - 1, Math.ceil(cam.y + VH / 2 / SC) + 1);
+        const s = SC + 0.6;
+        for (let ty = y0; ty <= y1; ty++)
+          for (let tx = x0; tx <= x1; tx++) {
+            const v = T[ty * MW + tx];
+            if (!v) continue;
+            const px = sx(tx),
+              py = sy(ty + 1);
+            if (v === 1) {
+              ctx.fillStyle =
+                (tx * 7 + ty * 3) % 5 === 0 ? "#1b2131" : "#191e2d";
+              ctx.fillRect(px, py, s, s);
+              const e = SC * 0.09;
+              if (get(tx, ty + 1) !== 1) {
+                ctx.fillStyle = "#3c4763";
+                ctx.fillRect(px, py, s, e);
+              }
+              if (get(tx, ty - 1) !== 1) {
+                ctx.fillStyle = "#10131d";
+                ctx.fillRect(px, py + SC - e, s, e);
+              }
+              if (get(tx - 1, ty) !== 1) {
+                ctx.fillStyle = "#2a3247";
+                ctx.fillRect(px, py, e, s);
+              }
+              if (get(tx + 1, ty) !== 1) {
+                ctx.fillStyle = "#2a3247";
+                ctx.fillRect(px + SC - e, py, e, s);
+              }
+            } else if (v === 2) {
+              ctx.fillStyle = "#7a2434";
+              for (let i = 0; i < 3; i++) {
+                ctx.beginPath();
+                ctx.moveTo(px + SC * (i / 3), py + SC);
+                ctx.lineTo(px + SC * ((i + 0.5) / 3), py + SC * 0.42);
+                ctx.lineTo(px + SC * ((i + 1) / 3), py + SC);
+                ctx.fill();
+              }
+              ctx.fillStyle = "#ff5a6a";
+              ctx.globalAlpha = 0.15;
+              ctx.fillRect(px, py + SC * 0.4, s, SC * 0.6);
+              ctx.globalAlpha = 1;
+            }
+          }
+        // 열린 문 자리 표시
+        if (!arenaOpen) {
+          ctx.fillStyle = "rgba(127,215,255,0.12)";
+          ctx.fillRect(
+            sx(DOOR.x0) - SC * 0.1,
+            sy(DOOR.y1 + 1),
+            SC * (DOOR.x1 - DOOR.x0 + 1.2),
+            SC * (DOOR.y1 - DOOR.y0 + 1),
+          );
+        }
+      }
+      function drawWorldDeco() {
+        ctx.font = `${Math.round(SC * 0.36)}px system-ui, "Malgun Gothic", sans-serif`;
+        ctx.textAlign = "center";
+        for (const h of HINTS) {
+          const d = Math.abs(P.x - h.x);
+          ctx.fillStyle = `rgba(190,205,230,${clamp(1 - (d - 6) / 10, 0.12, 0.75)})`;
+          ctx.fillText(h.t, sx(h.x), sy(h.y));
+        }
+        // 체크포인트
+        CHECKPOINTS.forEach((c, i) => {
+          const on = i <= cpIndex,
+            x = sx(c.x),
+            y = sy(c.y - 0.45);
+          ctx.fillStyle = "#2a3247";
+          ctx.fillRect(x - SC * 0.05, y - SC * 1.1, SC * 0.1, SC * 1.1);
+          ctx.fillStyle = on ? "#7fd7ff" : "#45506a";
+          ctx.beginPath();
+          ctx.arc(x, y - SC * 1.15, SC * 0.16, 0, Math.PI * 2);
+          ctx.fill();
+          if (on) {
+            ctx.globalAlpha = 0.18 + 0.06 * Math.sin(simTime * 3);
+            ctx.beginPath();
+            ctx.arc(x, y - SC * 1.15, SC * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+        });
+        // 골 깃발
+        const gx = sx(GOAL.x),
+          gy = sy(GOAL.y);
+        ctx.fillStyle = "#c9cfdc";
+        ctx.fillRect(gx - SC * 0.05, gy - SC * 2.6, SC * 0.1, SC * 2.6);
+        ctx.fillStyle = "#ffd27a";
+        ctx.beginPath();
+        ctx.moveTo(gx + SC * 0.05, gy - SC * 2.6);
+        ctx.lineTo(
+          gx + SC * 1.1,
+          gy - SC * (2.3 + 0.08 * Math.sin(simTime * 4)),
+        );
+        ctx.lineTo(gx + SC * 0.05, gy - SC * 2.0);
+        ctx.fill();
+      }
+      function drawEnemies() {
+        for (const e of enemies) {
+          if (!e.alive) continue;
+          const k = KIND[e.type],
+            x = sx(e.x),
+            y = sy(e.y),
+            r = e.r * SC;
+          const col = e.flash > 0 ? "#ffffff" : k.color;
+          ctx.save();
+          ctx.translate(x, y);
+          if (e.type === "drone" || e.type === "dummy") {
+            ctx.fillStyle = "rgba(0,0,0,0.25)";
+            ctx.beginPath();
+            ctx.ellipse(0, r * 1.4, r * 0.9, r * 0.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#2b2f3e";
+            ctx.fillRect(-r * 1.3, -r * 0.75, r * 2.6, r * 0.18);
+            ctx.fillStyle = "rgba(200,220,255,0.35)";
+            const sp = Math.sin(simTime * 40) * r * 0.5;
+            ctx.fillRect(
+              -r * 1.3 - sp * 0.2,
+              -r * 0.9,
+              r * 0.8 + sp * 0.2,
+              r * 0.08,
+            );
+            ctx.fillRect(r * 0.5, -r * 0.9, r * 0.8 - sp * 0.2, r * 0.08);
+            ctx.fillStyle = col;
+            ctx.beginPath();
+            ctx.arc(0, 0, r * 0.8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#1a1420";
+            ctx.beginPath();
+            ctx.arc(0, r * 0.05, r * 0.38, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = e.type === "dummy" ? "#ffe9b8" : "#ffdd6a";
+            ctx.beginPath();
+            ctx.arc(0, r * 0.05, r * 0.16, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (e.type === "chaser") {
+            ctx.rotate(Math.atan2(-e.vy, e.vx));
+            ctx.fillStyle = col;
+            ctx.beginPath();
+            ctx.moveTo(r * 1.1, 0);
+            ctx.lineTo(-r * 0.8, -r * 0.75);
+            ctx.lineTo(-r * 0.4, 0);
+            ctx.lineTo(-r * 0.8, r * 0.75);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = "#fff2e0";
+            ctx.beginPath();
+            ctx.arc(r * 0.25, 0, r * 0.16, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (e.type === "walker") {
+            const step = Math.sin(e.t * 10) * r * 0.18;
+            ctx.fillStyle = "#2b1c22";
+            ctx.fillRect(-r * 0.7, r * 0.45, r * 0.4, r * 0.45 + step);
+            ctx.fillRect(r * 0.3, r * 0.45, r * 0.4, r * 0.45 - step);
+            ctx.fillStyle = col;
+            ctx.fillRect(-r * 0.9, -r * 0.85, r * 1.8, r * 1.4);
+            ctx.fillStyle = "#1a1420";
+            ctx.fillRect(
+              e.dir > 0 ? r * 0.05 : -r * 0.75,
+              -r * 0.55,
+              r * 0.7,
+              r * 0.35,
+            );
+            ctx.fillStyle = "#ffe36a";
+            ctx.fillRect(
+              e.dir > 0 ? r * 0.4 : -r * 0.6,
+              -r * 0.48,
+              r * 0.2,
+              r * 0.2,
+            );
+          } else if (e.type === "turret") {
+            ctx.fillStyle = "#2b2234";
+            ctx.fillRect(-r, -r * 0.2, r * 2, r * 1.2);
+            ctx.save();
+            ctx.rotate(-e.aim);
+            ctx.fillStyle = "#4a3b55";
+            ctx.fillRect(0, -r * 0.18, r * 1.3, r * 0.36);
+            ctx.restore();
+            ctx.fillStyle = col;
+            ctx.beginPath();
+            ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2);
+            ctx.fill();
+            const charge = clamp(1 - e.fire / 1.4, 0, 1);
+            ctx.fillStyle = `rgba(255,240,250,${0.2 + charge * 0.8})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+          if (isMarked(e)) {
+            ctx.strokeStyle = "rgba(127,215,255,0.9)";
+            ctx.lineWidth = SC * 0.06;
+            ctx.beginPath();
+            ctx.arc(
+              x,
+              y,
+              r + SC * 0.25,
+              0,
+              Math.PI * 2 * clamp((e.markUntil - simTime) / MARK.dur, 0, 1),
+            );
+            ctx.stroke();
+          }
+          if (canExecute(e) && (e.hp < e.max || isMarked(e))) {
+            // 처형 표시 (한 번에 잡히는 적은 표시 생략): 한 번 더 베면 죽음 → 돌진 즉시 초기화
+            const my = y - r - SC * 0.75,
+              s = SC * (0.16 + 0.04 * Math.sin(simTime * 10));
+            ctx.fillStyle = "#ff4a5a";
+            ctx.beginPath();
+            ctx.moveTo(x, my - s);
+            ctx.lineTo(x + s * 0.7, my);
+            ctx.lineTo(x, my + s);
+            ctx.lineTo(x - s * 0.7, my);
+            ctx.closePath();
+            ctx.fill();
+          }
+          if (e.hp < e.max) {
+            const w = SC * 0.9;
+            ctx.fillStyle = "rgba(0,0,0,0.5)";
+            ctx.fillRect(x - w / 2, y - r - SC * 0.45, w, SC * 0.09);
+            ctx.fillStyle = k.color;
+            ctx.fillRect(
+              x - w / 2,
+              y - r - SC * 0.45,
+              w * (e.hp / e.max),
+              SC * 0.09,
+            );
+          }
+        }
+        ctx.fillStyle = "#ff7aa8";
+        for (const b of bullets) {
+          ctx.globalAlpha = 0.25;
+          ctx.beginPath();
+          ctx.arc(sx(b.x), sy(b.y), SC * 0.28, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.beginPath();
+          ctx.arc(sx(b.x), sy(b.y), SC * 0.12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      function drawSpearAt(tipX, tipY, fx, fy, alpha, glow) {
+        const L = SPC.len;
+        const tx = sx(tipX),
+          ty = sy(tipY),
+          bx = sx(tipX - fx * L),
+          by = sy(tipY - fy * L);
+        ctx.globalAlpha = alpha;
+        if (glow > 0) {
+          ctx.strokeStyle = `rgba(255,226,168,${0.35 * glow})`;
+          ctx.lineWidth = SC * 0.32;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = "#b89a6a";
+        ctx.lineWidth = SC * 0.085;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(tx - (tx - bx) * 0.18, ty - (ty - by) * 0.18);
+        ctx.stroke();
+        // 날
+        const nx = -fy,
+          ny = fx,
+          hx = tipX - fx * 0.32;
+        ctx.fillStyle = "#f4f1ea";
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(sx(hx + nx * 0.1), sy(tipY - fy * 0.32 + ny * 0.1));
+        ctx.lineTo(sx(tipX - fx * 0.26), sy(tipY - fy * 0.26));
+        ctx.lineTo(sx(hx - nx * 0.1), sy(tipY - fy * 0.32 - ny * 0.1));
+        ctx.closePath();
+        ctx.fill();
+        // 술
+        ctx.fillStyle = "#ff4a5a";
+        ctx.beginPath();
+        ctx.arc(
+          sx(tipX - fx * 0.36),
+          sy(tipY - fy * 0.36),
+          SC * 0.06,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      function drawAnchorsRings() {
+        for (const an of anchors) {
+          const x = sx(an.x),
+            y = sy(an.y),
+            r = SC * 0.32;
+          ctx.fillStyle = "rgba(255,210,122,0.12)";
+          ctx.beginPath();
+          ctx.arc(x, y, r * 2.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#ffd27a";
+          ctx.lineWidth = SC * 0.08;
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = "#ffd27a";
+          ctx.beginPath();
+          ctx.arc(x, y, r * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        RING_DEFS.forEach((rg, i) => {
+          const next = i === ringIdx,
+            after = i === (ringIdx + 1) % RING_DEFS.length;
+          const x = sx(rg.x),
+            y = sy(rg.y),
+            R = SC * 1.3;
+          ctx.strokeStyle = next
+            ? `rgba(127,255,190,${0.75 + 0.25 * Math.sin(simTime * 6)})`
+            : after
+              ? "rgba(127,255,190,0.28)"
+              : "rgba(127,255,190,0.08)";
+          ctx.lineWidth = SC * (next ? 0.14 : 0.07);
+          ctx.beginPath();
+          ctx.ellipse(x, y, R * 0.55, R, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          if (next || after) {
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.font = `700 ${Math.round(SC * 0.42)}px system-ui`;
+            ctx.textAlign = "center";
+            ctx.fillText(String(i + 1), x, y - R - SC * 0.15);
+          }
+        });
+        // 다음 링이 화면 밖이면 가장자리에 화살표
+        const rg = RING_DEFS[ringIdx],
+          rx = sx(rg.x),
+          ry = sy(rg.y),
+          m = 30 * dpr;
+        if (rx < m || rx > VW - m || ry < m || ry > VH - m) {
+          const ax = clamp(rx, m, VW - m),
+            ay = clamp(ry, m, VH - m),
+            a = Math.atan2(ry - VH / 2, rx - VW / 2);
+          ctx.save();
+          ctx.translate(ax, ay);
+          ctx.rotate(a);
+          ctx.fillStyle = "rgba(127,255,190,0.85)";
+          ctx.beginPath();
+          ctx.moveTo(14 * dpr, 0);
+          ctx.lineTo(-8 * dpr, -9 * dpr);
+          ctx.lineTo(-8 * dpr, 9 * dpr);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      function drawArm() {
+        if (ARM.state === "idle") return;
+        const hx = P.x + P.facing * 0.15,
+          hy = P.y + 0.05;
+        const x0 = sx(hx),
+          y0 = sy(hy),
+          x1 = sx(ARM.x),
+          y1 = sy(ARM.y);
+        // 사슬
+        ctx.strokeStyle = "#4b566e";
+        ctx.lineWidth = SC * 0.11;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        ctx.strokeStyle = ARM.state === "hooked" ? "#bfe9ff" : "#8fa0bd";
+        ctx.lineWidth = SC * 0.045;
+        ctx.setLineDash([SC * 0.14, SC * 0.1]);
+        ctx.lineDashOffset = -simTime * SC * 4;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // 갈고리 손
+        const a = Math.atan2(-(ARM.y - hy), ARM.x - hx);
+        ctx.save();
+        ctx.translate(x1, y1);
+        ctx.rotate(a);
+        ctx.fillStyle = ARM.state === "hooked" ? "#e8f6ff" : "#b8c4d8";
+        ctx.beginPath();
+        ctx.arc(0, 0, SC * 0.13, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = ctx.fillStyle;
+        ctx.lineWidth = SC * 0.06;
+        for (const k of [-1, 0, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(SC * 0.26, k * SC * 0.14);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      function updateScarf(dt) {
+        if (!P.scarf.length)
+          for (let i = 0; i < 7; i++) P.scarf.push({ x: P.x, y: P.y });
+        const ax = P.x - P.facing * 0.12,
+          ay = P.y + 0.18;
+        P.scarf[0].x = ax;
+        P.scarf[0].y = ay;
+        for (let i = 1; i < P.scarf.length; i++) {
+          const a = P.scarf[i - 1],
+            b = P.scarf[i];
+          const wave = Math.sin(simTime * 9 - i * 0.8) * 0.02;
+          b.x += (a.x - P.facing * 0.1 - b.x) * Math.min(1, 18 * dt);
+          b.y += (a.y - 0.03 + wave - b.y) * Math.min(1, 18 * dt);
+          const dx = b.x - a.x,
+            dy = b.y - a.y,
+            d = hyp(dx, dy),
+            L = 0.13;
+          if (d > L) {
+            b.x = a.x + (dx / d) * L;
+            b.y = a.y + (dy / d) * L;
+          }
+        }
+      }
+      function drawPlayer() {
+        // 잔상
+        for (const g of ghosts) {
+          ctx.globalAlpha = 0.35 * (g.life / g.max);
+          ctx.fillStyle = g.red ? "#ff5a6a" : "#7fd7ff";
+          ctx.fillRect(
+            sx(g.x - P.w / 2),
+            sy(g.y + P.h / 2),
+            P.w * SC,
+            P.h * SC,
+          );
+        }
+        ctx.globalAlpha = 1;
+        if (
+          P.inv > 0 &&
+          Math.floor(P.inv * 20) % 2 === 0 &&
+          P.state !== "travel"
+        )
+          ctx.globalAlpha = 0.45;
+
+        // 목도리
+        ctx.strokeStyle = "#ff4a5a";
+        ctx.lineCap = "round";
+        for (let i = 1; i < P.scarf.length; i++) {
+          ctx.lineWidth = SC * 0.13 * (1 - (i / P.scarf.length) * 0.6);
+          ctx.beginPath();
+          ctx.moveTo(sx(P.scarf[i - 1].x), sy(P.scarf[i - 1].y));
+          ctx.lineTo(sx(P.scarf[i].x), sy(P.scarf[i].y));
+          ctx.stroke();
+        }
+
+        const sq = P.squash,
+          w = P.w * (1 + sq * 0.6),
+          h = P.h * (1 - sq);
+        let rot = 0;
+        if (P.state === "cling") {
+          if (P.cw.y === 1) rot = Math.PI;
+        }
+        const cx = sx(P.x),
+          cy = sy(P.y - P.h / 2 + h / 2);
+        ctx.save();
+        ctx.translate(cx, cy);
+        if (P.state === "dash" || P.state === "travel") {
+          const dx = P.state === "dash" ? P.dx : P.trav.dx,
+            dy = P.state === "dash" ? P.dy : P.trav.dy;
+          ctx.rotate(-Math.atan2(dy, Math.abs(dx)) * P.facing * 0.4);
+        }
+        ctx.rotate(rot);
+        ctx.scale(P.facing * (rot ? -1 : 1), 1);
+        const W = w * SC,
+          H = h * SC;
+        // 몸
+        if (P.dashRefreshFx > 0) {
+          ctx.fillStyle = `rgba(127,215,255,${(P.dashRefreshFx / 0.18) * 0.9})`;
+          roundRect(
+            -W / 2 - SC * 0.08,
+            -H / 2 - SC * 0.08,
+            W + SC * 0.16,
+            H + SC * 0.16,
+            W * 0.34,
+          );
+          ctx.fill();
+        }
+        ctx.fillStyle = "#d9e1ee";
+        roundRect(-W / 2, -H / 2, W, H, W * 0.28);
+        ctx.fill();
+        // 망토 아랫단
+        ctx.fillStyle = "#9aa6bd";
+        ctx.fillRect(-W / 2, H * 0.12, W, H * 0.22);
+        // 얼굴 가리개
+        ctx.fillStyle = "#151a28";
+        roundRect(-W * 0.05, -H * 0.34, W * 0.52, H * 0.24, W * 0.08);
+        ctx.fill();
+        ctx.fillStyle = "#7fd7ff";
+        ctx.fillRect(W * 0.22, -H * 0.28, W * 0.13, H * 0.1);
+        ctx.restore();
+
+        // 손에 든 창: 돌진 중엔 앞으로 내지름
+        {
+          if (P.state === "dash") {
+            drawSpearAt(
+              P.x + P.dx * (SPC.len * 0.6 + 0.55),
+              P.y + P.dy * (SPC.len * 0.6 + 0.55),
+              P.dx,
+              P.dy,
+              1,
+              0.6,
+            );
+          } else {
+            const fx = P.facing * 0.55,
+              fy = 0.83,
+              l = hyp(fx, fy);
+            drawSpearAt(
+              P.x - P.facing * 0.05 + (fx / l) * 0.75,
+              P.y - 0.1 + (fy / l) * 0.75,
+              fx / l,
+              fy / l,
+              0.95,
+              0,
+            );
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+      function roundRect(x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+
+      function drawPreviews() {
+        if (!started || cleared) return;
+        // 공통 사거리 원
+        {
+          const cx = sx(P.x),
+            cy = sy(P.y),
+            R = RANGE * SC;
+          ctx.strokeStyle = "rgba(159,220,255,0.14)";
+          ctx.lineWidth = SC * 0.05;
+          ctx.setLineDash([SC * 0.3, SC * 0.22]);
+          ctx.lineDashOffset = -simTime * SC * 0.5;
+          ctx.beginPath();
+          ctx.arc(cx, cy, R, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.strokeStyle = "rgba(235,245,255,0.1)";
+          ctx.lineWidth = SC * 0.04;
+          ctx.beginPath();
+          ctx.arc(cx, cy, MD.lockRange * SC, 0, Math.PI * 2);
+          ctx.stroke();
+          if (P.execT > 0) {
+            ctx.strokeStyle = `rgba(255,90,106,${0.35 * (P.execT / MD.execWindow)})`;
+            ctx.lineWidth = SC * 0.05;
+            ctx.beginPath();
+            ctx.arc(cx, cy, MD.execRange * SC, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+        // 팔이 꽂힐 곳
+        if (
+          P.state !== "travel" &&
+          (ARM.state === "idle" || ARM.state === "retract")
+        ) {
+          const h = findHook();
+          if (h) {
+            const x = sx(h.x),
+              y = sy(h.y),
+              ready = ARM.cd <= 0;
+            ctx.strokeStyle = `rgba(159,220,255,${ready ? 0.22 : 0.1})`;
+            ctx.lineWidth = SC * 0.035;
+            ctx.setLineDash([SC * 0.08, SC * 0.16]);
+            ctx.beginPath();
+            ctx.moveTo(sx(P.x), sy(P.y));
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            if (h.kind === "anchor") {
+              ctx.strokeStyle = "rgba(255,210,122,0.95)";
+              ctx.lineWidth = SC * 0.06;
+              ctx.beginPath();
+              ctx.arc(x, y, SC * 0.6, 0, Math.PI * 2);
+              ctx.stroke();
+            } else if (h.kind === "enemy") {
+              ctx.strokeStyle = "rgba(159,220,255,0.9)";
+              ctx.lineWidth = SC * 0.05;
+              ctx.beginPath();
+              ctx.arc(x, y, (h.e.r + 0.5) * SC, 0, Math.PI * 2);
+              ctx.stroke();
+            } else {
+              const r = SC * 0.22;
+              ctx.strokeStyle = "rgba(159,220,255,0.95)";
+              ctx.lineWidth = SC * 0.06;
+              ctx.beginPath();
+              ctx.moveTo(x - r, y);
+              ctx.lineTo(x, y - r);
+              ctx.lineTo(x + r, y);
+              ctx.lineTo(x, y + r);
+              ctx.closePath();
+              ctx.stroke();
+            }
+          } else {
+            // 사거리 안에 꽂을 곳 없음
+            const a = aimDir(),
+              ex = sx(P.x + a.x * GR.range),
+              ey = sy(P.y + a.y * GR.range),
+              r = SC * 0.15;
+            ctx.strokeStyle = "rgba(160,170,190,0.25)";
+            ctx.lineWidth = SC * 0.04;
+            ctx.beginPath();
+            ctx.moveTo(ex - r, ey - r);
+            ctx.lineTo(ex + r, ey + r);
+            ctx.moveTo(ex + r, ey - r);
+            ctx.lineTo(ex - r, ey + r);
+            ctx.stroke();
+          }
+        }
+        // 돌진 대상 (분리형만)
+        if (MERGED || P.state === "dash" || P.state === "travel") return;
+        const t = findLockTarget(),
+          ready = canDash();
+        if (t) {
+          const r = (t.r + 0.35) * SC,
+            x = sx(t.x),
+            y = sy(t.y),
+            spin = simTime * 4;
+          ctx.strokeStyle = t._ext
+            ? "rgba(255,90,106,0.95)"
+            : ready
+              ? "rgba(235,245,255,0.85)"
+              : "rgba(235,245,255,0.3)";
+          ctx.lineWidth = SC * 0.05;
+          if (t._ext) {
+            ctx.save();
+            ctx.strokeStyle = "rgba(255,90,106,0.45)";
+            ctx.setLineDash([SC * 0.15, SC * 0.12]);
+            ctx.beginPath();
+            ctx.moveTo(sx(P.x), sy(P.y));
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.restore();
+          }
+          for (let k = 0; k < 4; k++) {
+            const a = spin + (k * Math.PI) / 2;
+            ctx.beginPath();
+            ctx.arc(x, y, r, a, a + 0.7);
+            ctx.stroke();
+          }
+        } else if (ready) {
+          const ax = mouse.x - P.x,
+            ay = mouse.y - P.y,
+            d = resolveDashDir(ax, ay);
+          if (!d) return;
+          const r = castAlong(P.x, P.y, P.w, P.h, d.x, d.y, MD.dist);
+          ctx.strokeStyle = "rgba(235,245,255,0.18)";
+          ctx.lineWidth = SC * 0.04;
+          ctx.beginPath();
+          ctx.moveTo(sx(P.x), sy(P.y));
+          ctx.lineTo(sx(P.x + d.x * r.d), sy(P.y + d.y * r.d));
+          ctx.stroke();
+        }
+      }
+      function drawParticles() {
+        for (const p of particles) {
+          const a = p.life / p.max;
+          if (p.ring) {
+            const t = 1 - a;
+            ctx.strokeStyle = `rgba(${p.color || "255,90,106"},${a})`;
+            ctx.lineWidth = SC * 0.1 * a;
+            ctx.beginPath();
+            ctx.arc(sx(p.x), sy(p.y), SC * (0.4 + t * 1.6), 0, Math.PI * 2);
+            ctx.stroke();
+            continue;
+          }
+          if (p.streak) {
+            const g = ctx.createLinearGradient(
+              sx(p.x1),
+              sy(p.y1),
+              sx(P.x),
+              sy(P.y),
+            );
+            g.addColorStop(0, "rgba(255,226,168,0)");
+            g.addColorStop(1, `rgba(255,226,168,${a})`);
+            ctx.strokeStyle = g;
+            ctx.lineWidth = SC * 0.12 * a;
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            ctx.moveTo(sx(p.x1), sy(p.y1));
+            ctx.lineTo(sx(P.x), sy(P.y));
+            ctx.stroke();
+            continue;
+          }
+          if (p.swing) {
+            const t = 1 - a,
+              ang = Math.atan2(-p.dy, p.dx),
+              dir = p.combo === 1 ? -1 : 1;
+            const R = SC * (p.combo === 2 ? 1.55 : 1.3),
+              span = p.combo === 2 ? 1.5 : 1.2;
+            const cx = sx(P.x + p.dx * 0.25),
+              cy = sy(P.y + p.dy * 0.25);
+            const a0 = ang - dir * span,
+              a1 = ang - dir * span + dir * span * 2 * Math.min(1, t * 2.2);
+            ctx.strokeStyle =
+              p.combo === 2
+                ? `rgba(255,226,168,${a})`
+                : `rgba(235,245,255,${a * 0.9})`;
+            ctx.lineCap = "round";
+            for (let k = 0; k < 3; k++) {
+              ctx.lineWidth = SC * (0.16 - k * 0.045);
+              ctx.globalAlpha = 1 - k * 0.3;
+              ctx.beginPath();
+              ctx.arc(
+                cx,
+                cy,
+                R - k * SC * 0.14,
+                Math.min(a0, a1),
+                Math.max(a0, a1),
+              );
+              ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+            continue;
+          }
+          if (p.slash) {
+            ctx.save();
+            ctx.translate(sx(p.x), sy(p.y));
+            ctx.rotate(-p.a);
+            ctx.strokeStyle = `rgba(255,246,228,${a})`;
+            ctx.lineWidth = SC * 0.12 * a;
+            ctx.beginPath();
+            ctx.arc(0, 0, SC * 0.9, -1.1, 1.1);
+            ctx.stroke();
+            ctx.lineWidth = SC * 0.05;
+            ctx.beginPath();
+            ctx.moveTo(-SC * 1.4, 0);
+            ctx.lineTo(SC * 1.4, 0);
+            ctx.stroke();
+            ctx.restore();
+            continue;
+          }
+          ctx.globalAlpha = a;
+          ctx.fillStyle = p.color;
+          const s = p.size * SC;
+          ctx.fillRect(sx(p.x) - s / 2, sy(p.y) - s / 2, s, s);
+        }
+        ctx.globalAlpha = 1;
+      }
+      function drawCrosshair() {
+        const x = mouse.sx,
+          y = mouse.sy,
+          r = 8 * dpr;
+        ctx.strokeStyle = "rgba(230,240,255,0.9)";
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - r * 1.8, y);
+        ctx.lineTo(x - r * 1.2, y);
+        ctx.moveTo(x + r * 1.2, y);
+        ctx.lineTo(x + r * 1.8, y);
+        ctx.moveTo(x, y - r * 1.8);
+        ctx.lineTo(x, y - r * 1.2);
+        ctx.moveTo(x, y + r * 1.2);
+        ctx.lineTo(x, y + r * 1.8);
+        ctx.stroke();
+        if (P.execT > 0) {
+          ctx.strokeStyle = "#ff5a6a";
+          ctx.lineWidth = 2.5 * dpr;
+          ctx.beginPath();
+          ctx.arc(
+            x,
+            y,
+            r * 2.6,
+            -Math.PI / 2,
+            -Math.PI / 2 + Math.PI * 2 * (P.execT / MD.execWindow),
+          );
+          ctx.stroke();
+        }
+        if (!P.grounded && P.state !== "cling") {
+          ctx.fillStyle = P.airDashes > 0 ? "#ebf5ff" : "rgba(235,245,255,0.2)";
+          ctx.beginPath();
+          ctx.arc(x + r * 2.2, y - r * 2.2, 3 * dpr, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (!canDash() && P.dashCd > 0) {
+          ctx.fillStyle = "rgba(127,215,255,0.5)";
+          ctx.fillRect(
+            x - r,
+            y + r * 2.3,
+            r * 2 * clamp(1 - P.dashCd / C.dashCd, 0, 1),
+            2 * dpr,
+          );
+        }
+      }
+      function drawHud() {
+        const u = dpr,
+          pad = 18 * u;
+        ctx.textAlign = "left";
+        // 체력
+        for (let i = 0; i < P.maxHp; i++) {
+          ctx.fillStyle = i < P.hp ? "#ff5a6a" : "rgba(255,90,106,0.18)";
+          ctx.beginPath();
+          ctx.arc(pad + 8 * u + i * 22 * u, pad + 8 * u, 7 * u, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.font = `${13 * u}px system-ui, "Malgun Gothic", sans-serif`;
+        // 이동 코스
+        ctx.fillStyle = "#7fffbe";
+        const cur = ringStart >= 0 ? (runTime - ringStart).toFixed(2) : "-";
+        ctx.fillText(
+          `코스 ${ringIdx}/${RING_DEFS.length}  ${cur}초  최고 ${isFinite(ringBest) ? ringBest.toFixed(2) + "초" : "-"}  (R 리셋)`,
+          pad,
+          pad + 98 * u,
+        );
+        // 마나 (슬로우)
+        const mw = 150 * u,
+          mh = 7 * u,
+          my = pad + 26 * u;
+        ctx.fillStyle = "rgba(127,215,255,0.15)";
+        ctx.fillRect(pad, my, mw, mh);
+        ctx.fillStyle = slowLock ? "#56708a" : slowOn ? "#bfe9ff" : "#7fd7ff";
+        ctx.fillRect(pad, my, mw * (mana / SLOW.max), mh);
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        ctx.fillRect(pad + mw * (SLOW.minStart / SLOW.max), my, 1.5 * u, mh);
+        ctx.fillStyle = "#9fdcff";
+        ctx.fillText(
+          MERGED ? "좌클릭 홀드 / Shift 슬로우" : "Shift 슬로우",
+          pad + mw + 10 * u,
+          my + mh,
+        );
+        ctx.fillStyle = MERGED ? "#ffd27a" : "#c9d4e6";
+        ctx.fillText(
+          MERGED
+            ? "합체형 — 우클릭: 벽이면 이동 · 적이면 관통 베기"
+            : "분리형 — 좌클릭 베기 · 우클릭 팔",
+          pad,
+          pad + 78 * u,
+        );
+        ctx.fillStyle = "#9fb0c8";
+        const t = runTime,
+          mm = Math.floor(t / 60),
+          ss = (t % 60).toFixed(1).padStart(4, "0");
+        ctx.fillText(
+          `시간 ${mm}:${ss}   처치 ${kills}   최대 연계 ${bestChain}`,
+          pad,
+          pad + 58 * u,
+        );
+        ctx.fillStyle = "rgba(159,176,200,0.6)";
+        ctx.fillText(
+          `[1] 벽 떨어질 때 튀기 ${C.detachUp ? "ON" : "OFF"}   [2] 팔 도착 시 벽 붙기 ${C.spearCling ? "ON" : "OFF"}   [3] 천장 붙기 ${C.clingCeiling ? "ON" : "OFF"}   [4 / Tab] 조작: ${MERGED ? "합체형" : "분리형"}`,
+          pad,
+          VH - pad,
+        );
+        // 공중 연계
+        if (P.chain > 1 || (P.chainEndT > 0 && P.chainEnd > 1)) {
+          const n = P.chain > 1 ? P.chain : P.chainEnd,
+            alive = P.chain > 1;
+          const a = alive ? 1 : clamp(P.chainEndT, 0, 1);
+          const sc = 1 + P.chainPop * 0.35;
+          ctx.save();
+          ctx.translate(VW / 2, VH * 0.12);
+          ctx.scale(sc, sc);
+          ctx.textAlign = "center";
+          ctx.fillStyle = `rgba(255,226,168,${a})`;
+          ctx.font = `800 ${30 * u}px system-ui, "Malgun Gothic", sans-serif`;
+          ctx.fillText(n + " 연계", 0, 0);
+          ctx.restore();
+        }
+        ctx.textAlign = "left";
+        // 토스트
+        ctx.textAlign = "center";
+        ctx.font = `600 ${17 * u}px system-ui, "Malgun Gothic", sans-serif`;
+        toasts.forEach((m, i) => {
+          ctx.fillStyle = `rgba(230,240,255,${Math.min(1, m.life)})`;
+          ctx.fillText(m.t, VW / 2, VH * 0.2 + i * 26 * u);
+        });
+        if (cleared) {
+          ctx.fillStyle = "rgba(5,7,12,0.6)";
+          ctx.fillRect(0, VH * 0.38, VW, VH * 0.2);
+          ctx.fillStyle = "#ffd27a";
+          ctx.font = `700 ${34 * u}px system-ui, "Malgun Gothic", sans-serif`;
+          ctx.fillText("클리어", VW / 2, VH * 0.47);
+          ctx.fillStyle = "#c9d4e6";
+          ctx.font = `${15 * u}px system-ui, "Malgun Gothic", sans-serif`;
+          ctx.fillText(
+            `${mm}:${ss} · 처치 ${kills} · 최대 연계 ${bestChain} — Enter로 다시 시작`,
+            VW / 2,
+            VH * 0.53,
+          );
+        }
+      }
+      function render() {
+        shakeX = (Math.random() * 2 - 1) * shake * SC;
+        shakeY = (Math.random() * 2 - 1) * shake * SC;
+        drawBackground();
+        drawTiles();
+        drawWorldDeco();
+        drawPreviews();
+        drawAnchorsRings();
+        drawEnemies();
+        // 슬로우: 세상만 어둡고 푸르게 (플레이어는 위에 그려서 또렷하게)
+        if (slowFx > 0.01) {
+          ctx.fillStyle = `rgba(10,24,52,${0.38 * slowFx})`;
+          ctx.fillRect(0, 0, VW, VH);
+        }
+        drawArm();
+        drawPlayer();
+        drawParticles();
+        // 비네트
+        const v = ctx.createRadialGradient(
+          VW / 2,
+          VH / 2,
+          VH * 0.35,
+          VW / 2,
+          VH / 2,
+          VH * 0.95,
+        );
+        v.addColorStop(0, "rgba(0,0,0,0)");
+        v.addColorStop(1, "rgba(0,0,0,0.5)");
+        ctx.fillStyle = v;
+        ctx.fillRect(0, 0, VW, VH);
+        drawHud();
+        if (started) drawCrosshair();
+      }
+
+      // =====================================================================
+      //  시작
+      // =====================================================================
+      function restart() {
+        buildMap();
+        arenaOpen = true;
+        cleared = false;
+        runTime = 0;
+        kills = 0;
+        cpIndex = 0;
+        enemies = ENEMY_DEFS.map(makeEnemy);
+        particles.length = ghosts.length = bullets.length = 0;
+        P.hp = P.maxHp;
+        toPoint(CHECKPOINTS[0]);
+        P.facing = 1;
+      }
+      restart();
+      requestAnimationFrame(frame);
+      // 테스트용 훅
+      window.__game = {
+        P,
+        ARM,
+        C,
+        enemies: () => enemies,
+        cam,
+        mouse,
+        mana: () => mana,
+        slow: () => slowFx,
+        setCp: (i) => {
+          cpIndex = i;
+          toPoint(CHECKPOINTS[i]);
+        },
+      };
+    </script>
+  </body>
+</html>
